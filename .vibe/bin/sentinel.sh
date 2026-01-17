@@ -116,7 +116,40 @@ while true; do
     fi
 
     # 2. RÈGLES UNIVERSELLES (Taille, Nommage, Sécurité)
-    # "$VIBE_ROOT/.vibe/bin/utils/check-size.sh"
+    # Vérification taille fichiers (.clinerules règle 16)
+    echo "📏 Vérification taille fichiers..."
+    MAX_VUE=250
+    MAX_RUST=300
+    MAX_MAIN_RS=120
+    SIZE_FAIL=0
+    for file in src/**/*.vue src/*.vue; do
+        if [ -f "$file" ]; then
+            lines=$(wc -l < "$file")
+            if [ "$lines" -gt $MAX_VUE ]; then
+                log_error "Fichier $file : $lines lignes (> $MAX_VUE)"
+                SIZE_FAIL=1
+            fi
+        fi
+    done
+    for file in src-tauri/src/*.rs; do
+        if [ -f "$file" ] && [[ "$file" != *"main.rs" ]]; then
+            lines=$(wc -l < "$file")
+            if [ "$lines" -gt $MAX_RUST ]; then
+                log_error "Fichier $file : $lines lignes (> $MAX_RUST)"
+                SIZE_FAIL=1
+            fi
+        fi
+    done
+    if [ -f "src-tauri/src/main.rs" ]; then
+        lines=$(wc -l < "src-tauri/src/main.rs")
+        if [ "$lines" -gt $MAX_MAIN_RS ]; then
+            log_error "Fichier src-tauri/src/main.rs : $lines lignes (> $MAX_MAIN_RS)"
+            SIZE_FAIL=1
+        fi
+    fi
+    if [ $SIZE_FAIL -eq 0 ]; then
+        log_success "Tailles fichiers OK"
+    fi
     
     # Vérification de sécurité critique avec gestion erreur
     if ! retry_command "\"$VIBE_ROOT/.vibe/bin/utils/check-security.sh\"" "Vérification sécurité"; then

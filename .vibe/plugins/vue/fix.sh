@@ -13,3 +13,27 @@ if [ -f "package.json" ]; then
         npm run format > /dev/null 2>&1 || true
     fi
 fi
+
+# 3. Vérifications .clinerules (règles surveillées par Sentinel)
+echo "🔍 Surveillance .clinerules pour Vue..."
+
+# Règle 10 : Supprimer console.log, debugger, alert
+for file in src/**/*.vue src/*.vue; do
+    if [ -f "$file" ]; then
+        sed -i '/console\.log(/d; /console\.error(/d; /console\.warn(/d; /console\.debug(/d; /debugger/d; /alert(/d' "$file"
+    fi
+done
+
+# Règle 11 : Forcer <script setup> (si <script> seul, le remplacer)
+for file in src/**/*.vue src/*.vue; do
+    if [ -f "$file" ] && grep -q '<script>' "$file" && ! grep -q '<script setup' "$file"; then
+        sed -i 's/<script>/<script setup>/' "$file"
+    fi
+done
+
+# Règle 12 : Signaler v-html ou innerHTML (pas de correction auto pour sécurité)
+if grep -r "v-html\|innerHTML" src/ --include="*.vue" > /dev/null 2>&1; then
+    echo "⚠️ .clinerules Règle 12 : v-html ou innerHTML détecté - corrigez manuellement"
+fi
+
+echo "✅ Corrections .clinerules appliquées pour Vue"

@@ -16,17 +16,124 @@ if [ ! -f ".vibe/config.toml" ]; then
 fi
 
 # 2. Exécution des tests profonds (via plugins)
-# Pour l'MVP, on réutilise les scripts de test simple, mais en prod on lancerait la suite complète
-echo "🧪 Exécution des tests..."
-if ! ./.vibe/bin/sentinel.sh --once; then
-    # Note: sentinel.sh devra supporter un flag --once pour ne pas boucler, 
-    # ou on appelle directement les plugins ici.
-    # Pour simplifier l'MVP :
-    echo "   (Simulation validation tests...)"
+echo "🧪 Exécution des tests Vue..."
+if ! ./.vibe/plugins/vue/test.sh; then
+    echo "❌ Tests Vue échoués"
+    ERRORS=$((ERRORS + 1))
+fi
+
+echo "🦀 Exécution des tests Rust..."
+if ! ./.vibe/plugins/rust/test.sh; then
+    echo "❌ Tests Rust échoués"
+    ERRORS=$((ERRORS + 1))
+fi
+
+echo "🔒 Audit sécurité..."
+if ! ./.vibe/plugins/security/audit.sh; then
+    echo "❌ Audit sécurité échoué"
+    ERRORS=$((ERRORS + 1))
 fi
 
 # 3. Vérifications statiques (Taille, Todo...)
-# TODO: Implémenter check-size.sh dans .vibe/bin/utils/
+echo "📏 Vérification taille fichiers (règle 16)..."
+# Ajuster selon règle 16: <250 Vue, <300 Rust, <120 main.rs
+for file in src/**/*.vue src/*.vue; do
+    if [ -f "$file" ]; then
+        lines=$(wc -l < "$file")
+        if [ "$lines" -gt 250 ]; then
+            echo "❌ $file : $lines lignes (>250)"
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✅ $file : $lines lignes"
+        fi
+    fi
+done
+for file in src-tauri/src/*.rs; do
+    if [ -f "$file" ] && [[ "$file" != *"main.rs" ]]; then
+        lines=$(wc -l < "$file")
+        if [ "$lines" -gt 300 ]; then
+            echo "❌ $file : $lines lignes (>300)"
+            ERRORS=$((ERRORS + 1))
+        else
+            echo "✅ $file : $lines lignes"
+        fi
+    fi
+done
+# Main.rs
+if [ -f "src-tauri/src/main.rs" ]; then
+    lines=$(wc -l < "src-tauri/src/main.rs")
+    if [ "$lines" -gt 120 ]; then
+        echo "❌ src-tauri/src/main.rs : $lines lignes (>120)"
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "✅ src-tauri/src/main.rs : $lines lignes"
+    fi
+fi
+
+echo "🔍 Vérifications règles .clinerules..."
+# Règle 2 : Nommage en Français (simple check : pas de mots anglais courants)
+if grep -r -i "\bfunction\b\|\bvariable\b\|\bconst\b\|\blet\b\|\bif\b\|\bfor\b\|\breturn\b" src/ src-tauri/src/ --include="*.js" --include="*.vue" --include="*.rs" > /dev/null 2>&1; then
+    echo "⚠️ Règle 2 : Mots anglais détectés (vérifiez nommage français)"
+else
+    echo "✅ Règle 2 : Nommage semble français"
+fi
+
+# Règle 10 : Pas de console.log, debugger, alert
+if grep -r "console\.log\|console\.error\|console\.warn\|console\.debug\|debugger\|alert" src/ --include="*.js" --include="*.vue" > /dev/null 2>&1; then
+    echo "❌ Règle 10 : console/debugger/alert trouvé"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "✅ Règle 10 : Pas de console/debugger/alert"
+fi
+
+# Règle 11 : Script setup obligatoire
+if find src/ -name "*.vue" -exec grep -L "<script setup" {} \; | grep -q .; then
+    echo "❌ Règle 11 : Fichier Vue sans <script setup"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "✅ Règle 11 : Tous les Vue utilisent <script setup"
+fi
+
+# Règle 12 : Sécurité Frontend
+if grep -r "v-html\|innerHTML" src/ --include="*.vue" > /dev/null 2>&1; then
+    echo "❌ Règle 12 : v-html ou innerHTML trouvé (risque XSS)"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "✅ Règle 12 : Pas de v-html/innerHTML"
+fi
+
+# Règle 13 : Auto-vérification Rust
+echo "🦀 Vérification compilation Rust..."
+if (cd src-tauri && cargo check --quiet); then
+    echo "✅ Règle 13 : Cargo check réussi"
+else
+    echo "❌ Règle 13 : Erreur de compilation Rust"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# Règle 17 : Pas d'unwrap/unsafe
+if grep -r "unwrap\|\.unwrap\|unsafe" src-tauri/src/ --include="*.rs" > /dev/null 2>&1; then
+    echo "❌ Règle 17 : unwrap() ou unsafe trouvé"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "✅ Règle 17 : Pas d'unwrap/unsafe"
+fi
+
+# Règle 18 : Documentation (simplifié)
+if grep -r "^pub fn" src-tauri/src/ --include="*.rs" | head -5 | xargs -I {} sh -c 'if ! grep -A5 "{}" src-tauri/src/*.rs | grep -q "///"; then echo "❌ Règle 18 : Fonction publique sans doc"; exit 1; fi' 2>/dev/null; then
+    echo "❌ Règle 18 : Fonctions publiques sans documentation"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "✅ Règle 18 : Fonctions publiques documentées"
+fi
+
+# Règle 4 : TODO avec nom
+if grep -r "TODO[^:]*:" src/ src-tauri/src/ --include="*.js" --include="*.vue" --include="*.rs" | grep -v "TODO([a-zA-Z_][a-zA-Z0-9_]*):" > /dev/null 2>&1; then
+    echo "❌ Règle 4 : TODO sans nom trouvé"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "✅ Règle 4 : TODO avec nom"
+fi
 
 if [ $ERRORS -eq 0 ]; then
     echo -e "${GREEN}✅ AUDIT SUCCÈS - PRÊT POUR COMMIT${NC}"
