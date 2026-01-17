@@ -13,8 +13,12 @@ const winRate = ref(0);
 const selectedAsset = ref('all');
 
 // Window controls
-import { getCurrentWindow } from '@tauri-apps/api/window';
 const appWindow = getCurrentWindow();
+
+// Manual Drag
+const startDrag = async () => {
+  await appWindow.startDragging();
+};
 
 const close = async () => {
     try {
@@ -72,8 +76,8 @@ function onTradeAdded() {
 <template>
   <div id="app">
     <div class="titlebar">
-      <!-- Zone de drag qui prend tout l'espace sauf le bouton -->
-      <div class="drag-region" data-tauri-drag-region></div>
+      <!-- Zone de drag manuelle -->
+      <div class="drag-region" @mousedown="startDrag"></div>
       <div class="window-controls">
         <button class="control-btn close-btn" @click="close">
            <!-- SVG Close -->
