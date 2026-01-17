@@ -15,7 +15,14 @@ const selectedAsset = ref('all');
 // Window controls
 const appWindow = getCurrentWindow();
 
-// Manual Drag
+const minimize = async () => {
+  await appWindow.minimize();
+};
+
+const toggleMaximize = async () => {
+  await appWindow.toggleMaximize();
+};
+
 const startDrag = async () => {
   await appWindow.startDragging();
 };
@@ -24,6 +31,7 @@ const close = async () => {
     try {
         await appWindow.close();
     } catch (e) {
+      console.error(e);
     }
 };
 
@@ -75,12 +83,17 @@ function onTradeAdded() {
 
 <template>
   <div id="app">
-    <div class="titlebar">
-      <!-- Zone de drag manuelle -->
-      <div class="drag-region" @mousedown="startDrag"></div>
+    <div class="titlebar" data-tauri-drag-region>
+      <!-- Zone de drag native -->
+      <div class="drag-region" data-tauri-drag-region></div>
       <div class="window-controls">
+        <button class="control-btn minimize-btn" @click="minimize">
+           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1,9 L9,9" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+        <button class="control-btn maximize-btn" @click="toggleMaximize">
+           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1,1 H9 V9 H1 Z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        </button>
         <button class="control-btn close-btn" @click="close">
-           <!-- SVG Close -->
            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1,1 L9,9 M9,1 L1,9" stroke="currentColor" stroke-width="1.5"/></svg>
         </button>
       </div>
