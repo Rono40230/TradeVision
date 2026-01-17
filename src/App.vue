@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch } from "vue";
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { initDB } from "./utils/db.js";
 import TradeForm from "./components/TradeForm.vue";
 import TradeList from "./components/TradeList.vue";
@@ -9,45 +10,92 @@ const db = ref(null);
 const totalTrades = ref(0);
 const totalProfit = ref(0);
 const winRate = ref(0);
+const selectedAsset = ref('all');
+
+// Window controls
+import { getCurrentWindow } from '@tauri-apps/api/window';
+const appWindow = getCurrentWindow();
+
+const close = async () => {
+    try {
+        await appWindow.close();
+    } catch (e) {
+    }
+};
 
 onMounted(async () => {
   db.value = await initDB();
-  // Load initial data
   await loadStats();
 });
+
+watch(selectedAsset, loadStats);
 
 async function loadStats() {
   if (!db.value) return;
 
-  // Get total trades
-  const tradesResult = await db.value.select('SELECT COUNT(*) as count FROM trades');
+  const params = selectedAsset.value !== 'all' ? [selectedAsset.value] : [];
+  
+  // Total Trades
+  let tradesQuery = 'SELECT COUNT(*) as count FROM trades';
+  if (selectedAsset.value !== 'all') tradesQuery += ' WHERE asset_type = ?';
+  const tradesResult = await db.value.select(tradesQuery, params);
   totalTrades.value = tradesResult[0].count;
 
-  // Get total profit (sum of profit_loss where status = 'closed')
-  const profitResult = await db.value.select('SELECT SUM(profit_loss) as profit FROM trades WHERE status = "closed"');
+  // Profit (closed)
+  let profitQuery = 'SELECT SUM(profit_loss) as profit FROM trades WHERE status = "closed"';
+  if (selectedAsset.value !== 'all') profitQuery += ' AND asset_type = ?';
+  const profitResult = await db.value.select(profitQuery, params);
   totalProfit.value = profitResult[0].profit || 0;
 
-  // Calculate win rate
-  const winsResult = await db.value.select('SELECT COUNT(*) as wins FROM trades WHERE status = "closed" AND profit_loss > 0');
-  const totalClosed = await db.value.select('SELECT COUNT(*) as closed FROM trades WHERE status = "closed"');
+  // Win Rate
+  let winsQuery = 'SELECT COUNT(*) as wins FROM trades WHERE status = "closed" AND profit_loss > 0';
+  let closedQuery = 'SELECT COUNT(*) as closed FROM trades WHERE status = "closed"';
+  if (selectedAsset.value !== 'all') {
+    winsQuery += ' AND asset_type = ?';
+    closedQuery += ' AND asset_type = ?';
+  }
+  const winsResult = await db.value.select(winsQuery, params);
+  const totalClosed = await db.value.select(closedQuery, params);
+  
   if (totalClosed[0].closed > 0) {
     winRate.value = ((winsResult[0].wins / totalClosed[0].closed) * 100).toFixed(2);
+  } else {
+    winRate.value = 0;
   }
 }
 
 function onTradeAdded() {
-  loadStats(); // Refresh stats after adding trade
+  loadStats();
 }
 </script>
 
 <template>
   <div id="app">
+    <div class="titlebar">
+      <!-- Zone de drag qui prend tout l'espace sauf le bouton -->
+      <div class="drag-region" data-tauri-drag-region></div>
+      <div class="window-controls">
+        <button class="control-btn close-btn" @click="close">
+           <!-- SVG Close -->
+           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1,1 L9,9 M9,1 L1,9" stroke="currentColor" stroke-width="1.5"/></svg>
+        </button>
+      </div>
+    </div>
+    
     <header>
       <h1>TradeVision - Journal de Trading</h1>
     </header>
     <main>
+      <div class="tabs">
+        <button :class="{ active: selectedAsset === 'all' }" @click="selectedAsset = 'all'">Vue Générale</button>
+        <button :class="{ active: selectedAsset === 'stocks' }" @click="selectedAsset = 'stocks'">Actions</button>
+        <button :class="{ active: selectedAsset === 'crypto' }" @click="selectedAsset = 'crypto'">Crypto</button>
+        <button :class="{ active: selectedAsset === 'forex' }" @click="selectedAsset = 'forex'">Forex</button>
+        <button :class="{ active: selectedAsset === 'options' }" @click="selectedAsset = 'options'">Options</button>
+      </div>
+
       <div class="dashboard">
-        <h2>Tableau de Bord</h2>
+        <h2>Tableau de Bord - {{ selectedAsset === 'all' ? 'Global' : selectedAsset.toUpperCase() }}</h2>
         <div class="stats">
           <div class="stat-card">
             <h3>Total Trades</h3>
@@ -63,8 +111,8 @@ function onTradeAdded() {
           </div>
         </div>
         <TradeForm @trade-added="onTradeAdded" />
-        <TradeList @stats-updated="loadStats" />
-        <PerformanceChart />
+        <TradeList :filter="selectedAsset" @stats-updated="loadStats" />
+        <PerformanceChart :filter="selectedAsset" />
       </div>
     </main>
   </div>
@@ -75,9 +123,66 @@ function onTradeAdded() {
   font-family: Arial, sans-serif;
   margin: 0;
   padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
+/* Custom Titlebar */
+.titlebar {
+  height: 30px;
+  background: #333;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch; /* Stretch children to fill height */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999; /* Max z-index */
+}
+
+.drag-region {
+  flex-grow: 1; /* Prend tout l'espace disponible à gauche */
+  width: 100%; /* Assurance */
+  height: 100%;
+  cursor: default;
+}
+
+.window-controls {
+    display: flex;
+    align-items: center;
+    background: #333; /* Cover anything behind */
+    z-index: 10000; /* Above drag region */
+    -webkit-app-region: no-drag; /* Explicitly non-draggable for Electron-like behavior if supported, though Tauri relies on data attr */
+}
+
+.control-btn {
+    background: transparent;
+    border: none;
+    color: #ccc;
+    width: 45px;
+    height: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.control-btn:hover {
+    background: #444;
+}
+
+.close-btn:hover {
+    background: #e81123;
+    color: white;
+}
+
+/* Push content down */
 header {
+  margin-top: 30px; 
   background-color: #333;
   color: white;
   padding: 1rem;
@@ -86,6 +191,30 @@ header {
 
 .dashboard {
   padding: 2rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  background-color: #444;
+  padding: 10px;
+}
+
+.tabs button {
+  padding: 10px 20px;
+  background: #555;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.tabs button.active {
+  background: #396cd8;
 }
 
 .stats {
@@ -111,67 +240,8 @@ header {
   margin: 0;
 }
 
-.placeholder {
-  text-align: center;
-  color: #666;
-}
-
 h1 {
   text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
+  margin: 0;
 }
 </style>
