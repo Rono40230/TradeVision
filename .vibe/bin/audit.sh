@@ -120,8 +120,22 @@ else
 fi
 
 # Règle 18 : Documentation (simplifié)
-if grep -r "^pub fn" src-tauri/src/ --include="*.rs" | head -5 | xargs -I {} sh -c 'if ! grep -A5 "{}" src-tauri/src/*.rs | grep -q "///"; then echo "❌ Règle 18 : Fonction publique sans doc"; exit 1; fi' 2>/dev/null; then
-    echo "❌ Règle 18 : Fonctions publiques sans documentation"
+# Vérifie les commentaires /// au-dessus des fonctions publiques
+MISSING_DOCS=$(grep -r "^pub fn" src-tauri/src/ --include="*.rs" | while read -r line; do
+    file=$(echo "$line" | cut -d: -f1)
+    # Échapper les caractères spéciaux pour grep -F si nécessaire, ou utiliser cut simplement
+    signature=$(echo "$line" | cut -d: -f3-)
+    
+    # Chercher la signature dans le fichier avec 5 lignes de contexte avant
+    # Vérifier si l'une de ces lignes contient ///
+    if ! grep -B5 -F "$signature" "$file" | grep -q "///"; then
+        echo "$signature ($file)"
+    fi
+done)
+
+if [ -n "$MISSING_DOCS" ]; then
+    echo "❌ Règle 18 : Fonctions publiques sans documentation :"
+    echo "$MISSING_DOCS"
     ERRORS=$((ERRORS + 1))
 else
     echo "✅ Règle 18 : Fonctions publiques documentées"
