@@ -290,8 +290,8 @@ async function handleSubmit() {
         
         // Trade Header
         const result = await db.execute(
-            `INSERT INTO trades (account_id, date, open_date, symbol, strategy, status, target_yield, position_size_pct, created_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, datetime('now'))`,
-            [props.account.id, today, today, payload.form.symbol.toUpperCase(), currentStrategy, targetYield, posSize]
+            `INSERT INTO trades (account_id, date, open_date, symbol, strategy, sub_strategy, status, target_yield, position_size_pct, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, datetime('now'))`,
+            [props.account.id, today, today, payload.form.symbol.toUpperCase(), currentStrategy, payload.subStrategy, targetYield, posSize]
         );
         const tradeId = result.lastInsertId;
         let cashImpact = 0;

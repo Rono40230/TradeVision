@@ -51,6 +51,7 @@
                 :pcs-trades="activeTradesPcs"
                 :rockets-trades="activeTradesRockets"
                 :assigned-trades="currentAssignedTrades"
+                :account="account"
                 @update-status="(p) => updateStatus(p.trade, p.newStatus)"
                 @assign="assignTrade"
             />

@@ -10,6 +10,7 @@
                 <thead>
                     <tr>
                         <th>Symbole</th>
+                        <th>Type</th>
                         <th>Statut</th>
                         <th>Ouvert le</th>
                         <th>Expiration</th>
@@ -26,10 +27,11 @@
                 </thead>
                 <tbody>
                     <tr v-if="wheelOptions.length === 0">
-                        <td colspan="13" class="empty-cell">Aucun trade d'options en cours.</td>
+                        <td colspan="14" class="empty-cell">Aucun trade d'options en cours.</td>
                     </tr>
                     <tr v-for="trade in wheelOptions" :key="trade.id">
                         <td>{{ trade.symbol }}</td>
+                        <td><span class="type-badge" :class="getTypeClass(trade)">{{ formatType(trade) }}</span></td>
                         <td>
                             <!-- Status Dropdown -->
                             <select 
@@ -136,55 +138,76 @@
     </div>
 
     <!-- 5. Assignations Block (Wheel Only mainly) -->
-        <div class="assignations-block" v-if="strategyType === 'wheel'">
+    <div class="assignations-block" v-if="strategyType === 'wheel'">
         <h3>Assignations</h3>
-            <div class="table-container">
+        <div class="table-container">
             <table class="trade-table">
                 <thead>
                     <tr>
-                        <th>Date</th>
                         <th>Symbole</th>
-                        <th>Type</th>
-                        <th>Prix Revient</th>
-                        <th>Qté</th>
-                        <th>Valeur Actuelle</th>
+                        <th>Date Assig.</th>
+                        <th>Strike</th>
+                        <th>Prix Actuel</th>
+                        <th>Nb Actions</th>
+                        <!-- Formula requested: Prix Revient = Prix Actuel * Nb Actions. Labeling it Valeur Totale to be semantically correct though user said Prix Revient -->
+                        <th>Coût Total</th> 
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                        <tr v-if="assignedTrades.length === 0">
+                    <tr v-if="assignedTrades.length === 0">
                         <td colspan="7" class="empty-cell">Aucune assignation en cours.</td>
                     </tr>
-                        <tr v-for="trade in assignedTrades" :key="trade.id">
-                        <td>{{ formatDate(trade.date) }}</td>
+                    <tr v-for="trade in assignedTrades" :key="trade.id">
                         <td>{{ trade.symbol }}</td>
-                        <td><span class="badge" :class="trade.side">Action</span></td>
-                        <td>{{ formatCurrency(trade.entry_price) }}</td>
-                        <td>{{ trade.quantity }}</td>
-                        <td>{{ formatCurrency(trade.entry_price * trade.quantity) }}</td> <!-- Placeholder for Current Val -->
-                            <td class="actions-cell">
-                            <button v-if="trade.status !== 'closed'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
+                        <td>{{ formatDate(trade.open_date || trade.date) }}</td>
+                        <td>{{ formatCurrency(trade.entry_price || trade.strike) }}</td>
+                        <td>--</td> <!-- Placeholder for Current Price -->
+                        <td>{{ trade.quantity * 100 }}</td>
+                        <td>{{ formatCurrency((trade.entry_price || trade.strike) * trade.quantity * 100) }}</td>
+                        <td class="actions-cell">
+                            <button class="action-btn roll-btn" @click="openRollModal(trade)">Rouler</button>
+                            <button class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
                         </td>
                     </tr>
                 </tbody>
             </table>
-            </div>
         </div>
+    </div>
+    
+    <CoveredCallModal
+        :visible="showRollModal"
+        :trade="selectedRollTrade"
+        :account="account"
+        @close="showRollModal = false"
+        @refresh="$emit('assign', null)" 
+    />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { formatCurrency, formatDate } from '../../utils/rocketUtils.js';
+import CoveredCallModal from './CoveredCallModal.vue';
 
 const props = defineProps({
     strategyType: { type: String, required: true },
     wheelOptions: { type: Array, default: () => [] },
     pcsTrades: { type: Array, default: () => [] },
     rocketsTrades: { type: Array, default: () => [] },
-    assignedTrades: { type: Array, default: () => [] }
+    assignedTrades: { type: Array, default: () => [] },
+    account: { type: Object, default: () => ({ id: null }) }
 });
 
 const emit = defineEmits(['update-status', 'assign']);
+
+const showRollModal = ref(false);
+const selectedRollTrade = ref(null);
+
+function openRollModal(trade) {
+    selectedRollTrade.value = trade;
+    showRollModal.value = true;
+}
 
 function onUpdateStatus(trade, newStatus) {
     emit('update-status', { trade, newStatus });
@@ -209,9 +232,56 @@ function formatStatus(status, strategy) {
 function canAssign(trade) {
     return trade.side === 'short' && (trade.type === 'put' || trade.type === 'call');
 }
+
+function formatType(trade) {
+    // Priority to stored sub_strategy if available
+    if (trade.sub_strategy) {
+        switch(trade.sub_strategy) {
+            case 'put': return 'Vente Put';
+            case 'put_long': return 'Achat Put';
+            case 'call': return 'Vente Call'; // Or Covered Call depending on context
+            case 'call_long': return 'Achat Call';
+            case 'hedge': return 'Hedge';
+        }
+    }
+
+    // Fallback if no sub_strategy stored
+    if (trade.type === 'put') {
+        return trade.side === 'short' ? 'Vente Put' : 'Achat Put';
+    }
+    if (trade.type === 'call') {
+        return trade.side === 'short' ? 'Vente Call' : 'Achat Call';
+    }
+    return trade.type;
+}
+
+function getTypeClass(trade) {
+    if (trade.sub_strategy) {
+        return trade.sub_strategy; // 'put', 'put_long', 'call', 'call_long', 'hedge'
+    }
+    if (trade.type === 'put') return trade.side === 'short' ? 'put' : 'put_long';
+    if (trade.type === 'call') return trade.side === 'short' ? 'call' : 'call_long';
+    return '';
+}
 </script>
 
 <style scoped>
+.type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: #444;
+    color: #eee;
+}
+.type-badge.put { background: #e91e63; color: white; } /* Vente Put - Pink/Red */
+.type-badge.put_long { background: #9c27b0; color: white; } /* Achat Put - Purple */
+.type-badge.call { background: #3f51b5; color: white; } /* Vente Call - Indigo */
+.type-badge.call_long { background: #2196f3; color: white; } /* Achat Call - Blue */
+.type-badge.hedge { background: #009688; color: white; } /* Hedge - Teal */
+
 .right-column-lists {
     display: flex;
     flex-direction: column;

@@ -23,6 +23,9 @@ export function useRocketState() {
             try {
                 await db.value.execute("ALTER TABLE accounts ADD COLUMN alloc_rocket REAL DEFAULT 0");
             } catch (e) {}
+            try {
+                await db.value.execute("ALTER TABLE trades ADD COLUMN sub_strategy TEXT");
+            } catch (e) {}
             await loadAccountData();
             await loadActiveTrades();
         } catch (e) {
@@ -56,7 +59,7 @@ export function useRocketState() {
         
         const query = `
             SELECT 
-                t.id as trade_id, t.date, t.open_date, t.symbol, t.strategy, t.target_yield, t.position_size_pct,
+                t.id as trade_id, t.date, t.open_date, t.symbol, t.strategy, t.sub_strategy, t.target_yield, t.position_size_pct,
                 l.id as leg_id, l.type, l.side, l.strike, l.expiration, l.open_price, l.quantity, l.status
             FROM legs l
             JOIN trades t ON l.trade_id = t.id
@@ -75,6 +78,7 @@ export function useRocketState() {
                     open_date: row.open_date,
                     symbol: row.symbol,
                     strategy: row.strategy,
+                    sub_strategy: row.sub_strategy,
                     target_yield: row.target_yield,
                     position_size_pct: row.position_size_pct,
                     legs: []
@@ -96,6 +100,7 @@ export function useRocketState() {
                         open_date: trade.open_date || trade.date,
                         symbol: trade.symbol,
                         strategy: trade.strategy,
+                        sub_strategy: trade.sub_strategy,
                         target_yield: trade.target_yield,
                         position_size_pct: trade.position_size_pct,
                         type: leg.type,
@@ -139,6 +144,39 @@ export function useRocketState() {
         });
 
         allActiveTrades.value = processedTrades;
+        await syncCashUsed();
+    }
+
+    async function syncCashUsed() {
+        if (!db.value || !account.value.id) return;
+        
+        // Calculate Wheel Usage
+        let used = 0;
+        const wheelTrades = allActiveTrades.value.filter(t => t.strategy === 'wheel');
+        
+        wheelTrades.forEach(t => {
+            if (t.status !== 'open' && t.status !== 'pending') return;
+
+            // Cash Secured Put (Short Put) -> Collateral = Strike
+            if (t.type === 'put' && t.side === 'short') {
+                used += t.strike * 100 * t.quantity;
+            }
+            // Assigned Stock (Long Stock) -> Invested = Entry Price (Assignment Strike)
+            else if (t.type === 'stock' && t.side === 'long') {
+                 used += t.entry_price * 100 * t.quantity; 
+            }
+            // Long Options (Achat Put, Achat Call, Hedge) -> Invested = Premium Paid
+            else if (t.side === 'long' && (t.type === 'put' || t.type === 'call')) {
+                used += t.entry_price * 100 * t.quantity;
+            }
+            // Short Call (Covered Call) -> Impact 0 (Covered by stock)
+        });
+
+        // Update DB
+        await db.value.execute("UPDATE accounts SET cash_used = ? WHERE id = ?", [used, account.value.id]);
+        
+        // Update Local State without full reload
+        account.value.cash_used = used;
     }
 
     async function saveMMSettings() {
