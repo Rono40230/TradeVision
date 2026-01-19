@@ -16,25 +16,34 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, defineProps, watch } from 'vue';
 import Database from '@tauri-apps/plugin-sql';
 import Chart from 'chart.js/auto';
 
+const props = defineProps(['filter']);
 const pnlChart = ref(null);
 const monthlyChart = ref(null);
 const maxDrawdown = ref(0);
 const sharpeRatio = ref(0);
 const winRate = ref(0);
+let pnlChartInstance = null;
+let monthlyChartInstance = null;
 
 const fetchTrades = async () => {
   try {
     const db = await Database.load('sqlite:trading.db');
-    const result = await db.select('SELECT * FROM trades ORDER BY date ASC');
+    let result;
+    if (props.filter && props.filter !== 'all') {
+      result = await db.select('SELECT * FROM trades WHERE asset_type = ? ORDER BY date ASC', [props.filter]);
+    } else {
+      result = await db.select('SELECT * FROM trades ORDER BY date ASC');
+    }
     return result;
   } catch (error) {
     return [];
   }
 };
+
 
 const calculateMetrics = (trades) => {
   if (!trades.length) return;
@@ -81,47 +90,66 @@ const calculateMetrics = (trades) => {
   sharpeRatio.value = stdDev ? avgReturn / stdDev : 0;
 
   // Graphiques
-  new Chart(pnlChart.value, {
+  if (pnlChartInstance) pnlChartInstance.destroy();
+  pnlChartInstance = new Chart(pnlChart.value, {
     type: 'line',
     data: {
       labels: dates,
       datasets: [{
         label: 'P&L Cumulé',
         data: pnlData,
-        borderColor: 'rgba(75, 192, 192, 1)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        borderColor: '#396cd8',
+        backgroundColor: 'rgba(57, 108, 216, 0.2)',
+        tension: 0.4,
+        fill: true
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top' },
+        legend: { labels: { color: '#e0e0e0' } },
+      },
+      scales: {
+        x: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } },
+        y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }
       }
     }
   });
 
   const months = Object.keys(monthlyReturns);
   const monthlyData = Object.values(monthlyReturns);
-  new Chart(monthlyChart.value, {
+  if (monthlyChartInstance) monthlyChartInstance.destroy();
+  monthlyChartInstance = new Chart(monthlyChart.value, {
     type: 'bar',
     data: {
       labels: months,
       datasets: [{
         label: 'Rendement Mensuel',
         data: monthlyData,
-        backgroundColor: 'rgba(153, 102, 255, 0.2)',
-        borderColor: 'rgba(153, 102, 255, 1)',
+        backgroundColor: '#396cd8',
+        borderColor: '#396cd8',
         borderWidth: 1
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
-        legend: { position: 'top' },
+        legend: { labels: { color: '#e0e0e0' } },
+      },
+      scales: {
+        x: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } },
+        y: { ticks: { color: '#a0a0a0' }, grid: { color: '#333' } }
       }
     }
   });
 };
+
+watch(() => props.filter, async () => {
+  const trades = await fetchTrades();
+  calculateMetrics(trades);
+});
 
 onMounted(async () => {
   const trades = await fetchTrades();
@@ -131,20 +159,37 @@ onMounted(async () => {
 
 <style scoped>
 .performance-chart {
-  margin: 20px;
+  margin: 20px 0;
 }
 .chart-container {
   margin-bottom: 20px;
   position: relative;
   height: 300px;
   width: 100%;
+  background: var(--surface-color, #2c2c2c);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #333);
 }
+
+h3 {
+  color: var(--text-color, #e0e0e0);
+  margin-bottom: 1rem;
+}
+
 .metrics {
   display: flex;
   justify-content: space-around;
   margin-top: 20px;
-  padding: 10px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+  padding: 20px;
+  background-color: var(--surface-color, #2c2c2c);
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #333);
+}
+
+.metrics p {
+  color: var(--text-color, #e0e0e0);
+  font-weight: 500;
+  margin: 0;
 }
 </style>

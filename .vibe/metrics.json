@@ -1,9 +1,9 @@
 {
-  "total_cycles": 20,
-  "last_cycle_time": 33,
-  "average_cycle_time": 4438,
+  "total_cycles": 278,
+  "last_cycle_time": 95,
+  "average_cycle_time": 867,
   "errors_count": 0,
-  "success_count": 20,
+  "success_count": 278,
   "plugins_used": [
     "rust,vue"
   ]

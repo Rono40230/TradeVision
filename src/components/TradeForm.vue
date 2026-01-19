@@ -7,6 +7,15 @@
         <input type="date" id="date" v-model="trade.date" required />
       </div>
       <div class="form-group">
+        <label for="asset_type">Actif / Portefeuille :</label>
+        <select id="asset_type" v-model="trade.asset_type" required>
+          <option value="stocks">Actions</option>
+          <option value="crypto">Cryptos</option>
+          <option value="forex">Forex</option>
+          <option value="options">Options</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label for="symbol">Symbole :</label>
         <input type="text" id="symbol" v-model="trade.symbol" placeholder="ex: EURUSD" required />
       </div>
@@ -50,6 +59,7 @@ const emit = defineEmits(['tradeAdded']);
 
 const trade = ref({
   date: new Date().toISOString().split('T')[0],
+  asset_type: 'stocks',
   symbol: '',
   type: 'buy',
   price: 0,
@@ -62,12 +72,13 @@ const trade = ref({
 async function submitTrade() {
   const db = await Database.load('sqlite:trading.db');
   await db.execute(
-    'INSERT INTO trades (date, symbol, type, price, quantity, strategy, notes, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [trade.value.date, trade.value.symbol, trade.value.type, trade.value.price, trade.value.quantity, trade.value.strategy, trade.value.notes, trade.value.tags]
+    'INSERT INTO trades (date, asset_type, symbol, type, price, quantity, strategy, notes, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [trade.value.date, trade.value.asset_type, trade.value.symbol, trade.value.type, trade.value.price, trade.value.quantity, trade.value.strategy, trade.value.notes, trade.value.tags]
   );
   // Reset form
   trade.value = {
     date: new Date().toISOString().split('T')[0],
+    asset_type: 'stocks',
     symbol: '',
     type: 'buy',
     price: 0,
