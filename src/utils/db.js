@@ -53,6 +53,9 @@ export async function initDB() {
   try { await db.execute("ALTER TABLE trades ADD COLUMN open_date TEXT"); } catch(e) {}
   try { await db.execute("ALTER TABLE trades ADD COLUMN target_yield REAL DEFAULT 0"); } catch(e) {}
   try { await db.execute("ALTER TABLE trades ADD COLUMN position_size_pct REAL DEFAULT 0"); } catch(e) {}
+  
+  // Add open_date to legs to track assignment dates separately
+  try { await db.execute("ALTER TABLE legs ADD COLUMN open_date TEXT"); } catch(e) {}
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS legs (
@@ -63,6 +66,7 @@ export async function initDB() {
       quantity REAL NOT NULL,
       strike REAL,
       expiration TEXT,
+      open_date TEXT,
       open_price REAL NOT NULL, 
       close_price REAL,
       current_price REAL,

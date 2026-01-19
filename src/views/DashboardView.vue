@@ -53,7 +53,7 @@ async function loadStats() {
     SELECT t.id, t.strategy, t.asset_type, l.type, l.side, l.status as leg_status
     FROM trades t 
     JOIN legs l ON t.id = l.trade_id 
-    WHERE t.status != 'closed' AND l.status != 'closed'
+    WHERE t.status != 'closed' AND l.status IN ('open', 'pending', 'neutralized')
   `;
   
   if (selectedAsset.value !== 'all') openQuery += " AND t.asset_type = ?";

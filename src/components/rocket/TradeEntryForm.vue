@@ -59,10 +59,7 @@
             <label>Quantité (Contrats)</label>
             <input 
                 type="number" 
-                :value="renteSubStrategy === 'put' ? computedQuantity : form.quantity" 
-                @input="e => form.quantity = +e.target.value"
-                :readonly="renteSubStrategy === 'put'"
-                :class="{'read-only': renteSubStrategy === 'put'}"
+                v-model.number="form.quantity"
                 class="input-field" 
             />
         </div>
@@ -139,8 +136,7 @@
                 <input 
                 type="number" 
                 v-model.number="form.quantity"
-                :class="['input-field', { 'read-only': isQuantityComputed }]"
-                :readonly="isQuantityComputed" 
+                class="input-field"
             />
         </div>
 
@@ -277,7 +273,7 @@ async function handleSubmit() {
         strategy: props.modelValue,
         subStrategy: (props.modelValue === 'wheel' ? renteSubStrategy.value : croissanceSubStrategy.value),
         form: { ...form.value },
-        quantityToInsert: (isQuantityComputed.value ? computedQuantity.value : form.value.quantity)
+        quantityToInsert: form.value.quantity 
     };
 
     try {
@@ -424,7 +420,7 @@ function resetForm() {
 
 /* Entry Block */
 .entry-block {
-    width: 400px;
+    width: 330px;
     box-sizing: border-box;
     background: var(--surface-color);
     border: 1px solid var(--border-color);

@@ -15,7 +15,7 @@ defineEmits(['update:modelValue']);
 
 <style scoped>
 .sidebar {
-  width: 240px;
+  width: 200px;
   background-color: var(--sidebar-bg);
   color: var(--text-color);
   display: flex;

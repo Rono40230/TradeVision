@@ -52,11 +52,12 @@
                         <td>{{ formatCurrency(trade.strike * 100) }}</td>
                         <td>{{ trade.quantity }}</td>
                         <td>{{ formatCurrency(trade.strike * 100 * trade.quantity) }}</td>
-                        <td>{{ ((trade.price / trade.strike) * 100).toFixed(2) }}%</td>
-                        <td>{{ formatCurrency(trade.price * 100 * trade.quantity) }}</td>
+                        <td>{{ trade.target_yield ? trade.target_yield + '%' : ((trade.price / trade.strike) * 100).toFixed(2) + '%' }}</td>
+                        <td>{{ formatCurrency(trade.target_yield ? (trade.strike * 100 * trade.quantity * (trade.target_yield / 100)) : (trade.price * 100 * trade.quantity)) }}</td>
                         <td class="actions-cell">
                             <button v-if="canAssign(trade) && trade.status === 'open'" class="action-btn assign-btn" @click="$emit('assign', trade)">Assign</button>
                             <button v-if="trade.status !== 'closed' && trade.status !== 'assigned'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
+                            <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
                         </td>
                     </tr>
                 </tbody>
@@ -94,6 +95,7 @@
                         <td>{{ ( (trade.price * 100) / ( (Math.abs(trade.strike_short - trade.strike_long) * 100) - (trade.price * 100) ) * 100 ).toFixed(2) }}%</td>
                         <td class="actions-cell">
                             <button v-if="trade.status !== 'closed'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
+                            <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
                         </td>
                     </tr>
                 </tbody>
@@ -130,6 +132,7 @@
                         <td class="actions-cell">
                             <button v-if="trade.status === 'open'" class="action-btn neutral-btn" @click="onUpdateStatus(trade, 'neutralized')">Neutraliser</button>
                             <button v-if="trade.status !== 'closed'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
+                            <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
                         </td>
                     </tr>
                 </tbody>
@@ -147,27 +150,31 @@
                         <th>Symbole</th>
                         <th>Date Assig.</th>
                         <th>Strike</th>
-                        <th>Prix Actuel</th>
                         <th>Nb Actions</th>
-                        <!-- Formula requested: Prix Revient = Prix Actuel * Nb Actions. Labeling it Valeur Totale to be semantically correct though user said Prix Revient -->
                         <th>Coût Total</th> 
+                        <th>Prix Actuel</th>
+                        <th>P&L</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-if="assignedTrades.length === 0">
-                        <td colspan="7" class="empty-cell">Aucune assignation en cours.</td>
+                        <td colspan="8" class="empty-cell">Aucune assignation en cours.</td>
                     </tr>
                     <tr v-for="trade in assignedTrades" :key="trade.id">
                         <td>{{ trade.symbol }}</td>
                         <td>{{ formatDate(trade.open_date || trade.date) }}</td>
                         <td>{{ formatCurrency(trade.entry_price || trade.strike) }}</td>
-                        <td>--</td> <!-- Placeholder for Current Price -->
                         <td>{{ trade.quantity * 100 }}</td>
                         <td>{{ formatCurrency((trade.entry_price || trade.strike) * trade.quantity * 100) }}</td>
+                        <td>{{ trade.current_price ? formatCurrency(trade.current_price) : '--' }}</td>
+                        <td :class="{ 'positive': trade.current_price && (trade.current_price - (trade.entry_price || trade.strike)) >= 0, 'negative': trade.current_price && (trade.current_price - (trade.entry_price || trade.strike)) < 0 }">
+                            {{ trade.current_price ? formatCurrency((trade.current_price * trade.quantity * 100) - ((trade.entry_price || trade.strike) * trade.quantity * 100)) : '--' }}
+                        </td>
                         <td class="actions-cell">
                             <button class="action-btn roll-btn" @click="openRollModal(trade)">Rouler</button>
                             <button class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
+                            <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
                         </td>
                     </tr>
                 </tbody>
@@ -199,7 +206,7 @@ const props = defineProps({
     account: { type: Object, default: () => ({ id: null }) }
 });
 
-const emit = defineEmits(['update-status', 'assign']);
+const emit = defineEmits(['update-status', 'assign', 'delete']);
 
 const showRollModal = ref(false);
 const selectedRollTrade = ref(null);
@@ -381,6 +388,21 @@ h3 {
     margin-left: 5px;
 }
 .neutral-btn:hover { background: #1976D2; }
+
+.delete-btn {
+    background: transparent;
+    color: #999;
+    border: 1px solid #444;
+    margin-left: 5px;
+    font-size: 1rem;
+    padding: 2px 6px;
+    line-height: 1;
+}
+.delete-btn:hover {
+    background: rgba(255, 0, 0, 0.2);
+    color: #ff6b6b;
+    border-color: #ff6b6b;
+}
 
 /* Status Select Styles */
 .status-select {

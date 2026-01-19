@@ -15,6 +15,8 @@ export function useRocketState() {
     const tradeToAssign = ref(null);
     const showStatusModal = ref(false);
     const pendingStatusUpdate = ref(null);
+    const showDeleteModal = ref(false);
+    const tradeToDelete = ref(null);
 
     // Initialization
     async function init() {
@@ -60,7 +62,7 @@ export function useRocketState() {
         const query = `
             SELECT 
                 t.id as trade_id, t.date, t.open_date, t.symbol, t.strategy, t.sub_strategy, t.target_yield, t.position_size_pct,
-                l.id as leg_id, l.type, l.side, l.strike, l.expiration, l.open_price, l.quantity, l.status
+                l.id as leg_id, l.type, l.side, l.strike, l.expiration, l.open_price, l.open_date as leg_open_date, l.quantity, l.status
             FROM legs l
             JOIN trades t ON l.trade_id = t.id
             WHERE t.account_id = ? 
@@ -97,7 +99,7 @@ export function useRocketState() {
                         id: leg.leg_id,
                         trade_id: trade.id,
                         date: trade.date,
-                        open_date: trade.open_date || trade.date,
+                        open_date: leg.leg_open_date || trade.open_date || trade.date,
                         symbol: trade.symbol,
                         strategy: trade.strategy,
                         sub_strategy: trade.sub_strategy,
@@ -344,10 +346,11 @@ export function useRocketState() {
         try {
             await db.value.execute(`UPDATE legs SET status = 'assigned' WHERE id = ?`, [trade.id]);
             if (trade.type === 'put') {
+                 // The Stock leg starts when the Put expires
                  await db.value.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, open_price, status) 
-                     VALUES (?, 'stock', 'long', ?, ?, 'open')`,
-                    [trade.trade_id, trade.quantity, trade.strike]
+                    `INSERT INTO legs (trade_id, type, side, quantity, open_price, open_date, status) 
+                     VALUES (?, 'stock', 'long', ?, ?, ?, 'open')`,
+                    [trade.trade_id, trade.quantity, trade.strike, trade.expiration]
                 );
             }
             await loadActiveTrades();
@@ -363,27 +366,100 @@ export function useRocketState() {
         showStatusModal.value = true;
     }
     
-    async function confirmStatusUpdate() {
+    async function confirmStatusUpdate(closePrice) {
         if (!pendingStatusUpdate.value) return;
         const { trade, newStatus } = pendingStatusUpdate.value;
         try {
             const today = new Date().toISOString().split('T')[0];
-            if (trade.strategy === 'pcs') {
-                 await db.value.execute(`UPDATE legs SET status = ? WHERE trade_id = ?`, [newStatus, trade.id]);
-                 if (newStatus === 'open') {
-                     await db.value.execute(`UPDATE trades SET status = 'open', open_date = ? WHERE id = ?`, [today, trade.id]);
+            
+            // WHEEL / ROCKETS logic (Per Leg)
+            if (trade.strategy !== 'pcs') {
+                 let updates = [`status = ?`];
+                 let params = [newStatus];
+
+                 // If closing, set close info & calculate P&L
+                 if (newStatus === 'closed' && closePrice !== undefined && closePrice !== null) {
+                    updates.push(`close_price = ?`);
+                    params.push(closePrice);
+                    
+                    // Simple P&L Calc per leg
+                    // Short Put/Call: (Open - Close) * 100 * Qty
+                    // Long Put/Call/Stock: (Close - Open) * 100 * Qty
+                    let pl = 0;
+                    const qty = trade.quantity;
+                    const openP = trade.price || trade.open_price || trade.entry_price || 0; // handle various field names
+                    
+                    if (trade.side === 'short') { // Selling to open
+                        pl = (openP - closePrice) * 100 * qty;
+                    } else { // Buying to open
+                        pl = (closePrice - openP) * 100 * qty;
+                    }
+
+                    // Update Trade-level P&L (Accumulative if multiple legs but usually one for these strategies)
+                    // Note: If reusing trade_id for multiple legs over time (e.g. rolling), this might need summing.
+                    // For now, let's update the trade P&L by adding to it.
+                    await db.value.execute(`UPDATE trades SET profit_loss = profit_loss + ? WHERE id = ?`, [pl, trade.trade_id]);
                  }
-            } else {
-                 await db.value.execute(`UPDATE legs SET status = ? WHERE id = ?`, [newStatus, trade.id]);
+
+                 params.push(trade.id); // WHERE id = ?
+                 
+                 await db.value.execute(`UPDATE legs SET ${updates.join(', ')} WHERE id = ?`, params);
+
                  if (newStatus === 'open') {
                      await db.value.execute(`UPDATE trades SET status = 'open', open_date = ? WHERE id = ?`, [today, trade.trade_id]);
                  }
+            } 
+            // PCS logic (Per Trade / Group of legs)
+            else if (trade.strategy === 'pcs') {
+                 // For PCS, 'trade' represents the header. We close legs associated.
+                 await db.value.execute(`UPDATE legs SET status = ? WHERE trade_id = ?`, [newStatus, trade.id]);
+                 
+                 // If closing PCS, we might want P&L. For now simple status update.
+                 // Future todo: Implement price input for PCS close (Debit paid to close).
+                 
+                 if (newStatus === 'open') {
+                     await db.value.execute(`UPDATE trades SET status = 'open', open_date = ? WHERE id = ?`, [today, trade.id]);
+                 }
             }
+            
             await loadActiveTrades();
+            await syncCashUsed(); // Ensure cash is released
         } catch (e) {
+            // Error handled silently or add UI notification later
         } finally {
             showStatusModal.value = false;
             pendingStatusUpdate.value = null;
+        }
+    }
+
+    async function deleteTrade(trade) {
+        tradeToDelete.value = trade;
+        showDeleteModal.value = true;
+    }
+
+    async function confirmDeleteTrade() {
+        if (!tradeToDelete.value) return;
+        const trade = tradeToDelete.value;
+        
+        try {
+            if (trade.strategy === 'pcs') {
+                 // For PCS, ID refers to the Trade Header
+                 await db.value.execute("DELETE FROM legs WHERE trade_id = ?", [trade.id]);
+                 await db.value.execute("DELETE FROM trades WHERE id = ?", [trade.id]);
+            } else {
+                 // For Wheel/Rockets, ID refers to the Leg
+                 await db.value.execute("DELETE FROM legs WHERE id = ?", [trade.id]);
+                 // Cleanup empty headers
+                 await db.value.execute("DELETE FROM trades WHERE id NOT IN (SELECT DISTINCT trade_id FROM legs)");
+            }
+            
+            await loadActiveTrades();
+            await syncCashUsed();
+        } catch(e) {
+             // Error handled silently
+        } finally {
+            showDeleteModal.value = false;
+            tradeToDelete.value = null;
         }
     }
 
@@ -396,10 +472,10 @@ export function useRocketState() {
         // State
         db, account, plLatent, allActiveTrades, strategyType, mmConfig,
         // Modals
-        showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate,
+        showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate, showDeleteModal, tradeToDelete,
         // Methods
         init, loadAccountData, loadActiveTrades, saveMMSettings, updateTotalCapital,
-        assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted,
+        assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted, deleteTrade, confirmDeleteTrade,
         // Computed
         displayedCapital, activeTradesWheel, wheelOptions, wheelStocks, activeTradesPcs, activeTradesRockets,
         currentActiveTrades, currentAssignedTrades, strategyLabel, calendarEvents,

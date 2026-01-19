@@ -64,9 +64,30 @@
             <p style="text-align: center; margin-bottom: 2rem;">
                 Confirmez-vous le passage du statut à <strong>{{ formatStatusLabel(pendingStatusUpdate.newStatus) }}</strong> pour <strong>{{ pendingStatusUpdate.trade.symbol }}</strong> ?
             </p>
+
+            <div v-if="pendingStatusUpdate.newStatus === 'closed'" class="input-group">
+                <label>Prix de Clôture</label>
+                <input type="number" step="0.01" v-model.number="closePrice" class="input-field" placeholder="ex: 0.05 ou 150.00" />
+            </div>
+
             <div class="modal-actions">
-                <button class="cancel-btn" @click="$emit('update:showStatusModal', false)">Annuler</button>
-                <button class="submit-btn" @click="$emit('confirm-status-update')">Confirmer</button>
+                <button class="cancel-btn" @click="closeStatusModal">Annuler</button>
+                <button class="submit-btn" @click="confirmStatus">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteModal && tradeToDelete" class="modal-overlay">
+        <div class="modal-content danger-zone">
+            <h3 class="text-danger">Supprimer le Trade</h3>
+            <p style="text-align: center; margin-bottom: 2rem;">
+                Voulez-vous vraiment supprimer définitivement le trade sur <strong>{{ tradeToDelete.symbol }}</strong> ?<br>
+                <small class="text-muted">Cette action est irréversible et supprimera l'historique associé.</small>
+            </p>
+            <div class="modal-actions">
+                <button class="cancel-btn" @click="$emit('update:showDeleteModal', false)">Annuler</button>
+                <button class="delete-btn-confirm" @click="$emit('confirm-delete')">Supprimer Définitivement</button>
             </div>
         </div>
     </div>
@@ -74,24 +95,44 @@
 </template>
 
 <script setup>
+import { ref, watch } from 'vue';
+
 const props = defineProps({
     showSettings: Boolean,
     mmConfig: { type: Object, required: true },
     showAssignModal: Boolean,
     tradeToAssign: Object,
     showStatusModal: Boolean,
-    pendingStatusUpdate: Object
+    pendingStatusUpdate: Object,
+    showDeleteModal: Boolean,
+    tradeToDelete: Object
 });
 
 const emit = defineEmits([
     'update:showSettings',
     'update:showAssignModal',
     'update:showStatusModal',
+    'update:showDeleteModal',
     'save-mm-settings',
     'confirm-assignment',
     'confirm-status-update',
+    'confirm-delete',
     'update-capital'
 ]);
+
+const closePrice = ref(null);
+
+watch(() => props.showStatusModal, (val) => {
+    if (val) closePrice.value = null;
+});
+
+function closeStatusModal() {
+    emit('update:showStatusModal', false);
+}
+
+function confirmStatus() {
+    emit('confirm-status-update', closePrice.value);
+}
 
 function onCapitalInput() {
     emit('update-capital');
@@ -126,6 +167,28 @@ function formatStatusLabel(status) {
     max-width: 90%;
     border: 1px solid var(--border-color);
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+
+.modal-content.danger-zone {
+    border-color: #ef4444;
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.2);
+}
+
+.text-danger {
+    color: #ef4444;
+}
+
+.delete-btn-confirm {
+    background: #dc2626;
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.delete-btn-confirm:hover {
+    background: #b91c1c;
 }
 
 .modal-content h3 {

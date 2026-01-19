@@ -27,10 +27,13 @@
         :tradeToAssign="tradeToAssign"
         v-model:showStatusModal="showStatusModal"
         :pendingStatusUpdate="pendingStatusUpdate"
+        v-model:showDeleteModal="showDeleteModal"
+        :tradeToDelete="tradeToDelete"
         @update-capital="updateTotalCapital"
         @save-mm-settings="saveMMSettings"
         @confirm-assignment="confirmAssignment"
         @confirm-status-update="confirmStatusUpdate"
+        @confirm-delete="confirmDeleteTrade"
     />
 
     <div class="main-layout">
@@ -54,6 +57,7 @@
                 :account="account"
                 @update-status="(p) => updateStatus(p.trade, p.newStatus)"
                 @assign="assignTrade"
+                @delete="deleteTrade"
             />
         </div>
     </div>
@@ -74,7 +78,8 @@ const {
     init, saveMMSettings, updateTotalCapital, confirmAssignment, confirmStatusUpdate, onTradeSubmitted,
     displayedCapital, strategyLabel, mmStatusText, mmStatusColor, calendarEvents,
     wheelOptions, activeTradesPcs, activeTradesRockets, currentAssignedTrades,
-    updateStatus, assignTrade
+    updateStatus, assignTrade, deleteTrade,
+    showDeleteModal, tradeToDelete, confirmDeleteTrade
 } = useRocketState();
 
 onMounted(async () => {
