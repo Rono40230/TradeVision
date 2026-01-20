@@ -94,30 +94,65 @@ export function useRocketState() {
             const legs = trade.legs;
             
             if (trade.strategy === 'wheel' || trade.strategy === 'rockets') {
-                 legs.forEach(leg => {
-                    processedTrades.push({
-                        id: leg.leg_id,
-                        trade_id: trade.id,
-                        date: trade.date,
-                        open_date: leg.leg_open_date || trade.open_date || trade.date,
-                        symbol: trade.symbol,
-                        strategy: trade.strategy,
-                        sub_strategy: trade.sub_strategy,
-                        target_yield: trade.target_yield,
-                        position_size_pct: trade.position_size_pct,
-                        type: leg.type,
-                        side: leg.side,
-                        strike: leg.strike,
-                        expiration: leg.expiration,
-                        price: leg.open_price,
-                        entry_price: leg.open_price,
-                        quantity: leg.quantity,
-                        status: leg.status,
-                        sub_strategy: (leg.type === 'put' && leg.side === 'short') ? 'Exo Vente PUT' : 
-                                      (leg.type === 'call' && leg.side === 'short') ? 'Exo Vente CALL' : 
-                                      leg.type
+                 if (trade.sub_strategy === 'hedge_spread') {
+                     // HEDGE SPREAD Consolidé
+                     const longLeg = legs.find(l => l.side === 'long');
+                     const shortLeg = legs.find(l => l.side === 'short');
+                     // We use the short leg status or just first one
+                     const mainLeg = longLeg || legs[0]; 
+                     
+                     if (mainLeg) {
+                         // Find price from Long Leg (where we stored the debit)
+                         const price = longLeg ? longLeg.open_price : 0;
+                         
+                         processedTrades.push({
+                            id: mainLeg.leg_id, // Use ID for actions, might need trade_id for delete
+                            trade_id: trade.id,
+                            date: trade.date,
+                            open_date: mainLeg.leg_open_date || trade.open_date || trade.date,
+                            symbol: trade.symbol,
+                            strategy: trade.strategy,
+                            sub_strategy: 'hedge_spread', // Explicit for display
+                            target_yield: trade.target_yield,
+                            position_size_pct: trade.position_size_pct,
+                            type: 'spread',
+                            side: 'debit',
+                            strike: (longLeg ? longLeg.strike : '?') + '/' + (shortLeg ? shortLeg.strike : '?'), // Display 350/300
+                            expiration: mainLeg.expiration,
+                            price: price, 
+                            entry_price: price,
+                            quantity: mainLeg.quantity,
+                            status: mainLeg.status
+                        });
+                     }
+                 } else {
+                     legs.forEach(leg => {
+                        processedTrades.push({
+                            id: leg.leg_id,
+                            trade_id: trade.id,
+                            date: trade.date,
+                            open_date: leg.leg_open_date || trade.open_date || trade.date,
+                            symbol: trade.symbol,
+                            strategy: trade.strategy,
+                            sub_strategy: trade.sub_strategy,
+                            target_yield: trade.target_yield,
+                            position_size_pct: trade.position_size_pct,
+                            type: leg.type,
+                            side: leg.side,
+                            strike: leg.strike,
+                            expiration: leg.expiration,
+                            price: leg.open_price,
+                            entry_price: leg.open_price,
+                            quantity: leg.quantity,
+                            status: leg.status,
+                            // Preserve explicit sub_strategy if it exists (like 'hedge', 'put_long'), otherwise guess
+                            sub_strategy: trade.sub_strategy ? trade.sub_strategy :
+                                          ((leg.type === 'put' && leg.side === 'short') ? 'Exo Vente PUT' : 
+                                          (leg.type === 'call' && leg.side === 'short') ? 'Exo Vente CALL' : 
+                                          leg.type)
+                        });
                     });
-                });
+                 }
             }
             else if (trade.strategy === 'pcs') {
                 const shortLeg = legs.find(l => l.side === 'short');
@@ -246,6 +281,33 @@ export function useRocketState() {
         return [];
     });
 
+    const totalExpectedPremium = computed(() => {
+        let total = 0;
+        currentActiveTrades.value.forEach(trade => {
+             // Skip stocks if ever they get in here
+             if (trade.type === 'stock') return;
+
+             let premium = 0;
+             if (trade.target_yield) {
+                 premium = (trade.strike * 100 * trade.quantity) * (trade.target_yield / 100);
+             } else {
+                 premium = Math.abs(trade.price * 100 * trade.quantity);
+             }
+
+             // If it's a debit trade (Long Option or Spread Debit), we subtract it from the expected premium (Net Premium)
+             // Or at least we don't ADD it.
+             // Given "Prime Attendue" usually means "Income from selling", expenses should reduce it.
+             if (trade.sub_strategy === 'hedge' || trade.sub_strategy === 'hedge_spread' || trade.type === 'spread') {
+                 // Hedges display "-" in the table, so they contribute 0 to the sum.
+                 return;
+             } 
+             
+             // For everything else displayed in the table (Short Puts, standard Long Puts showing cost), we sum it.
+             total += premium;
+        });
+        return Math.max(0, total);
+    });
+
     const strategyLabel = computed(() => {
         if (strategyType.value === 'wheel') return 'Wheel';
         if (strategyType.value === 'pcs') return 'Put Credit Spread';
@@ -291,7 +353,7 @@ export function useRocketState() {
                 used += t.strike * 100 * t.quantity;
             }
             if (t.type === 'stock' && t.side === 'long' && t.status === 'open') {
-                 used += t.entry_price * t.quantity;
+                 used += t.entry_price * 100 * t.quantity;
             }
         });
         const totalCap = displayedCapital.value;
@@ -437,6 +499,21 @@ export function useRocketState() {
         showDeleteModal.value = true;
     }
 
+    async function updateTradeDate(trade, newDate) {
+        if (!trade || !newDate) return;
+        try {
+            // Update Leg open_date
+            await db.value.execute("UPDATE legs SET open_date = ? WHERE id = ?", [newDate, trade.id]);
+            
+            // Also update main trade open_date if it matches (optional but good for consistency)
+            await db.value.execute("UPDATE trades SET open_date = ? WHERE id = ?", [newDate, trade.trade_id]);
+            
+            await loadActiveTrades();
+        } catch (e) {
+            // Silent error
+        }
+    }
+
     async function confirmDeleteTrade() {
         if (!tradeToDelete.value) return;
         const trade = tradeToDelete.value;
@@ -475,10 +552,10 @@ export function useRocketState() {
         showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate, showDeleteModal, tradeToDelete,
         // Methods
         init, loadAccountData, loadActiveTrades, saveMMSettings, updateTotalCapital,
-        assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted, deleteTrade, confirmDeleteTrade,
+        assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted, deleteTrade, confirmDeleteTrade, updateTradeDate,
         // Computed
         displayedCapital, activeTradesWheel, wheelOptions, wheelStocks, activeTradesPcs, activeTradesRockets,
         currentActiveTrades, currentAssignedTrades, strategyLabel, calendarEvents,
-        wheelStats, pcsStats, rocketsStats, mmStatusText, mmStatusColor
+        wheelStats, pcsStats, rocketsStats, mmStatusText, mmStatusColor, totalExpectedPremium
     };
 }

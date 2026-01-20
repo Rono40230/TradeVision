@@ -3,7 +3,6 @@ import { ref, onMounted, computed } from "vue";
 import { initDB } from "./utils/db.js";
 import DashboardView from "./views/DashboardView.vue";
 import RocketAcademy from "./components/RocketAcademy.vue";
-import AppSidebar from "./components/AppSidebar.vue";
 import AppTitlebar from "./components/AppTitlebar.vue";
 
 const db = ref(null);
@@ -18,11 +17,9 @@ onMounted(async () => {
 
 <template>
   <div id="app">
-    <AppTitlebar />
+    <AppTitlebar v-model="currentView" />
     
     <div class="app-container">
-      <AppSidebar v-model="currentView" />
-
       <main class="main-content">
         <DashboardView v-if="currentView === 'dashboard'" :db="db" />
 

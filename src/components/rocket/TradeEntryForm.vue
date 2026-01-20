@@ -18,8 +18,11 @@
 
             <label><input type="radio" v-model="renteSubStrategy" value="call" /> Vente CALL</label>
             <label><input type="radio" v-model="renteSubStrategy" value="call_long" /> Achat CALL</label>
-
-            <label style="grid-column: 1 / -1;"><input type="radio" v-model="renteSubStrategy" value="hedge" /> Hedge</label>
+        </div>
+        
+        <div class="sub-strategy" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <label><input type="radio" v-model="renteSubStrategy" value="hedge" /> Hedge Simple</label>
+            <label><input type="radio" v-model="renteSubStrategy" value="hedge_spread" /> Hedge Spread</label>
         </div>
 
         <div class="input-group">
@@ -30,12 +33,7 @@
             <label>Date Expiration</label>
             <input type="date" v-model="form.expiry" class="input-field" />
         </div>
-            <div class="input-group">
-            <label>Strike</label>
-            <input type="number" v-model="form.strike" placeholder="350" class="input-field" />
-        </div>
 
-        <!-- Fields specific to Vente PUT, Achat PUT, Vente CALL, Achat CALL -->
         <div v-if="['put', 'put_long', 'call', 'call_long'].includes(renteSubStrategy)" class="input-group">
             <label>Taille de position (%)</label>
             <select v-model.number="form.positionSizePct" class="input-field">
@@ -43,6 +41,23 @@
                 <option :value="10">10 %</option>
                 <option :value="15">15 %</option>
             </select>
+        </div>
+
+        <div v-if="renteSubStrategy !== 'hedge_spread'" class="input-group">
+            <label>Strike</label>
+            <input type="number" v-model="form.strike" placeholder="350" class="input-field" />
+        </div>
+
+        <div v-if="renteSubStrategy === 'hedge_spread'" class="complex-legs">
+             <h4>Hedge (Spread)</h4>
+             <div class="input-group">
+                <label>Pente Protection (Achat Put)</label>
+                <input type="number" v-model="form.strikeLong" class="input-field" />
+            </div>
+             <div class="input-group">
+                <label>Pente Financement (Vente Put)</label>
+                <input type="number" v-model="form.strikeShort" class="input-field" />
+            </div>
         </div>
 
         <div class="input-group" v-if="renteSubStrategy !== 'hedge'">
@@ -320,14 +335,37 @@ async function handleSubmit() {
                 case 'hedge': 
                     type = 'put'; side = 'long';
                     impact = (Math.abs(payload.form.price) * 100 * qC);
+                    // Force Status to Open (Standard)
+                    break;
+                case 'hedge_spread':
+                    // HEDGE SPREAD: 2 legs (Long Put + Short Put)
+                    // Insert Long Put (We store the full Debit here for P&L tracking)
+                    await db.execute(
+                        `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
+                         VALUES (?, 'put', 'long', ?, ?, ?, ?, 'open')`,
+                         [tradeId, qC, payload.form.strikeLong, payload.form.expiry, Math.abs(payload.form.price)]
+                    );
+                    // Insert Short Put
+                    await db.execute(
+                        `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
+                         VALUES (?, 'put', 'short', ?, ?, ?, 0, 'open')`,
+                         [tradeId, qC, payload.form.strikeShort, payload.form.expiry]
+                    );
+                    
+                    impact = (Math.abs(payload.form.price) * 100 * qC);
+                    side = 'spread'; 
                     break;
             }
 
-            await db.execute(
-                `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`,
-                [tradeId, type, side, qC, payload.form.strike, payload.form.expiry, payload.form.price]
-            );
+            // CRITICAL FIX: Ensure 'hedge' subStrategy is saved correctly in the single leg insert
+            if (payload.subStrategy !== 'hedge_spread') {
+                // If it's a hedge simple, type is put, side is long
+                await db.execute(
+                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`,
+                    [tradeId, type, side, qC, payload.form.strike, payload.form.expiry, payload.form.price]
+                );
+            }
             cashImpact = impact;
         } 
         // --- PCS ---

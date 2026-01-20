@@ -17,6 +17,7 @@
         :mm-status-text="mmStatusText"
         :mm-status-color="mmStatusColor"
         :calendar-events="calendarEvents"
+        :total-expected-premium="totalExpectedPremium"
         @open-settings="showSettings = true"
     />
 
@@ -58,6 +59,8 @@
                 @update-status="(p) => updateStatus(p.trade, p.newStatus)"
                 @assign="assignTrade"
                 @delete="deleteTrade"
+                @update-date="(t, d) => updateTradeDate(t, d)"
+                @refresh-data="onTradeSubmitted"
             />
         </div>
     </div>
@@ -79,7 +82,8 @@ const {
     displayedCapital, strategyLabel, mmStatusText, mmStatusColor, calendarEvents,
     wheelOptions, activeTradesPcs, activeTradesRockets, currentAssignedTrades,
     updateStatus, assignTrade, deleteTrade,
-    showDeleteModal, tradeToDelete, confirmDeleteTrade
+    showDeleteModal, tradeToDelete, confirmDeleteTrade,
+    totalExpectedPremium, updateTradeDate
 } = useRocketState();
 
 onMounted(async () => {

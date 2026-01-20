@@ -1,6 +1,9 @@
 <script setup>
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
+defineProps(['modelValue']);
+defineEmits(['update:modelValue']);
+
 const appWindow = getCurrentWindow();
 
 const minimize = async () => {
@@ -20,6 +23,27 @@ const close = async () => {
 
 <template>
     <div class="titlebar" data-tauri-drag-region>
+      <div class="nav-tabs" data-tauri-drag-region>
+          <button 
+            :class="{ active: modelValue === 'dashboard' }" 
+            @click="$emit('update:modelValue', 'dashboard')"
+          >
+            Dashboard
+          </button>
+          <button 
+            :class="{ active: modelValue === 'rocket-academy' }" 
+            @click="$emit('update:modelValue', 'rocket-academy')"
+          >
+            Rocket Academy
+          </button>
+          <button 
+            :class="{ active: modelValue === 'kasper-academy' }" 
+            @click="$emit('update:modelValue', 'kasper-academy')"
+          >
+            Kasper Academy
+          </button>
+      </div>
+
       <!-- Zone de drag native -->
       <div class="drag-region" data-tauri-drag-region></div>
       <div class="window-controls">
@@ -38,52 +62,79 @@ const close = async () => {
 
 <style scoped>
 .titlebar {
-  height: 32px;
+  height: 38px;
   background: var(--sidebar-bg);
   user-select: none;
   display: flex;
   justify-content: space-between;
-  align-items: stretch;
+  align-items: center; /* Center Vertically */
   z-index: 9999;
   border-bottom: 1px solid var(--border-color);
   flex: 0 0 auto;
+  padding-left: 10px;
 }
 
 .drag-region {
-  flex-grow: 1;
-  width: 100%;
-  height: 100%;
-  cursor: default;
+    flex-grow: 1;
+    height: 100%;
+}
+
+.nav-tabs {
+    display: flex;
+    gap: 0.5rem;
+    height: 100%;
+    align-items: center;
+    -webkit-app-region: no-drag; /* Important to click buttons */
+}
+
+.nav-tabs button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 0 12px;
+    height: 100%; /* Full height for ease of click */
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    opacity: 0.7;
+}
+
+.nav-tabs button:hover {
+    color: var(--text-color);
+    opacity: 1;
+    background: rgba(255,255,255,0.05);
+}
+
+.nav-tabs button.active {
+    color: var(--accent-color);
+    border-bottom: 2px solid var(--accent-color);
+    opacity: 1;
 }
 
 .window-controls {
     display: flex;
-    align-items: center;
-    background: transparent;
-    z-index: 10000;
-    -webkit-app-region: no-drag;
+    height: 100%;
 }
-
 .control-btn {
+    width: 45px;
+    height: 100%;
     background: transparent;
     border: none;
     color: var(--text-muted);
-    width: 46px;
-    height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+    -webkit-app-region: no-drag;
 }
-
 .control-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-color);
 }
-
 .close-btn:hover {
-    background: #c42b1c;
+    background: #e81123;
     color: white;
 }
 </style>

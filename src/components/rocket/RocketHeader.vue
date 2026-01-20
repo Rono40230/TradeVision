@@ -19,6 +19,10 @@
           {{ formatCurrency(plLatent) }}
         </span>
       </div>
+      <div class="mm-item">
+        <span class="label">Prime Attendue</span>
+        <span class="value">{{ formatCurrency(totalExpectedPremium) }}</span>
+      </div>
     </div>
     
     <!-- Calendar Events inline (Horizontal) -->
@@ -43,7 +47,8 @@ const props = defineProps({
   strategyLabel: { type: String, default: '' },
   mmStatusText: { type: String, default: '' },
   mmStatusColor: { type: String, default: '' },
-  calendarEvents: { type: Array, default: () => [] }
+  calendarEvents: { type: Array, default: () => [] },
+  totalExpectedPremium: { type: Number, default: 0 }
 });
 
 defineEmits(['open-settings']);

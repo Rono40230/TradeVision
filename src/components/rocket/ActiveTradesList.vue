@@ -44,16 +44,43 @@
                                 <option value="open">Ouvert</option>
                             </select>
                         </td>
-                        <td>{{ trade.status === 'open' ? formatDate(trade.open_date || trade.date) : '-' }}</td>
+                        <td>
+                            <input 
+                                v-if="trade.status === 'open'" 
+                                type="date" 
+                                :value="trade.open_date || trade.date" 
+                                @change="$emit('update-date', trade, $event.target.value)"
+                                class="date-input-table"
+                            />
+                            <span v-else>-</span>
+                        </td>
                         <td>{{ formatDate(trade.expiration) }}</td>
                         <td>{{ trade.position_size_pct ? trade.position_size_pct + '%' : '-' }}</td>
                         <td>{{ trade.strike }}</td>
                         <td>{{ formatCurrency(trade.price) }}</td>
-                        <td>{{ formatCurrency(trade.strike * 100) }}</td>
+                        <td>
+                            <span v-if="trade.sub_strategy === 'hedge_spread' || trade.sub_strategy === 'hedge' || trade.type === 'spread' || trade.sub_strategy === 'call' || (trade.type === 'call' && trade.side === 'short')">-</span>
+                            <span v-else>{{ formatCurrency(trade.strike * 100) }}</span>
+                        </td>
                         <td>{{ trade.quantity }}</td>
-                        <td>{{ formatCurrency(trade.strike * 100 * trade.quantity) }}</td>
-                        <td>{{ trade.target_yield ? trade.target_yield + '%' : ((trade.price / trade.strike) * 100).toFixed(2) + '%' }}</td>
-                        <td>{{ formatCurrency(trade.target_yield ? (trade.strike * 100 * trade.quantity * (trade.target_yield / 100)) : (trade.price * 100 * trade.quantity)) }}</td>
+                        <td>
+                            <span v-if="trade.sub_strategy === 'call' || (trade.type === 'call' && trade.side === 'short')">-</span>
+                            <span v-else-if="trade.sub_strategy === 'hedge_spread' || trade.sub_strategy === 'hedge' || trade.type === 'spread'">
+                                {{ formatCurrency(trade.entry_price ? (trade.entry_price * 100 * trade.quantity) : (trade.price * 100 * trade.quantity)) }} (Debit)
+                            </span>
+                             <span v-else>
+                                {{ formatCurrency(trade.strike * 100 * trade.quantity) }}
+                             </span>
+                        </td>
+                        <td>{{ trade.type === 'spread' || trade.sub_strategy === 'hedge' ? '-' : (trade.target_yield ? trade.target_yield + '%' : ((trade.price / trade.strike) * 100).toFixed(2) + '%') }}</td>
+                        <td>
+                             <span v-if="trade.sub_strategy === 'hedge' || trade.sub_strategy === 'hedge_spread'">
+                                 -
+                             </span>
+                             <span v-else>
+                                {{ formatCurrency(trade.target_yield ? (trade.strike * 100 * trade.quantity * (trade.target_yield / 100)) : (trade.price * 100 * trade.quantity)) }}
+                             </span>
+                        </td>
                         <td class="actions-cell">
                             <button v-if="canAssign(trade) && trade.status === 'open'" class="action-btn assign-btn" @click="$emit('assign', trade)">Assign</button>
                             <button v-if="trade.status !== 'closed' && trade.status !== 'assigned'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
@@ -163,7 +190,14 @@
                     </tr>
                     <tr v-for="trade in assignedTrades" :key="trade.id">
                         <td>{{ trade.symbol }}</td>
-                        <td>{{ formatDate(trade.open_date || trade.date) }}</td>
+                        <td>
+                            <input 
+                                type="date" 
+                                :value="trade.open_date || trade.date" 
+                                @change="$emit('update-date', trade, $event.target.value)"
+                                class="date-input-table"
+                            />
+                        </td>
                         <td>{{ formatCurrency(trade.entry_price || trade.strike) }}</td>
                         <td>{{ trade.quantity * 100 }}</td>
                         <td>{{ formatCurrency((trade.entry_price || trade.strike) * trade.quantity * 100) }}</td>
@@ -187,10 +221,29 @@
         :trade="selectedRollTrade"
         :account="account"
         @close="showRollModal = false"
-        @refresh="$emit('assign', null)" 
+        @refresh="$emit('refresh-data')" 
     />
   </div>
 </template>
+
+<style scoped>
+.date-input-table {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 105px;
+}
+
+.date-input-table:hover, .date-input-table:focus {
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+</style>
 
 <script setup>
 import { ref } from 'vue';
@@ -206,7 +259,7 @@ const props = defineProps({
     account: { type: Object, default: () => ({ id: null }) }
 });
 
-const emit = defineEmits(['update-status', 'assign', 'delete']);
+const emit = defineEmits(['update-status', 'assign', 'delete', 'update-date', 'refresh-data']);
 
 const showRollModal = ref(false);
 const selectedRollTrade = ref(null);
@@ -246,9 +299,10 @@ function formatType(trade) {
         switch(trade.sub_strategy) {
             case 'put': return 'Vente Put';
             case 'put_long': return 'Achat Put';
-            case 'call': return 'Vente Call'; // Or Covered Call depending on context
+            case 'call': return 'Covered Call'; // Or Covered Call depending on context
             case 'call_long': return 'Achat Call';
             case 'hedge': return 'Hedge';
+            case 'hedge_spread': return 'Hedge Spread';
         }
     }
 
@@ -257,7 +311,7 @@ function formatType(trade) {
         return trade.side === 'short' ? 'Vente Put' : 'Achat Put';
     }
     if (trade.type === 'call') {
-        return trade.side === 'short' ? 'Vente Call' : 'Achat Call';
+        return trade.side === 'short' ? 'Covered Call' : 'Achat Call';
     }
     return trade.type;
 }
@@ -288,6 +342,7 @@ function getTypeClass(trade) {
 .type-badge.call { background: #3f51b5; color: white; } /* Vente Call - Indigo */
 .type-badge.call_long { background: #2196f3; color: white; } /* Achat Call - Blue */
 .type-badge.hedge { background: #009688; color: white; } /* Hedge - Teal */
+.type-badge.hedge_spread { background: #004d40; color: white; } /* Hedge Spread - Dark Teal */
 
 .right-column-lists {
     display: flex;
