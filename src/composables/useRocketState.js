@@ -155,21 +155,54 @@ export function useRocketState() {
                  }
             }
             else if (trade.strategy === 'pcs') {
-                const shortLeg = legs.find(l => l.side === 'short');
-                const longLeg = legs.find(l => l.side === 'long');
-                if (shortLeg && longLeg) {
-                     processedTrades.push({
-                        id: trade.id,
-                        date: trade.date,
-                        symbol: trade.symbol,
-                        strategy: trade.strategy,
-                        expiration: shortLeg.expiration,
-                        strike_short: shortLeg.strike,
-                        strike_long: longLeg.strike,
-                        price: shortLeg.open_price,
-                        quantity: shortLeg.quantity,
-                        status: shortLeg.status
-                    });
+                if (trade.sub_strategy === 'ic') {
+                    // Iron Condor: 4 Legs
+                    const putShort = legs.find(l => l.type === 'put' && l.side === 'short');
+                    const putLong = legs.find(l => l.type === 'put' && l.side === 'long');
+                    const callShort = legs.find(l => l.type === 'call' && l.side === 'short');
+                    const callLong = legs.find(l => l.type === 'call' && l.side === 'long');
+
+                    if (putShort && putLong && callShort && callLong) {
+                         processedTrades.push({
+                            id: trade.id, // Trade ID
+                            date: trade.date,
+                            open_date: trade.open_date || trade.date,
+                            symbol: trade.symbol,
+                            strategy: trade.strategy,
+                            sub_strategy: 'ic',
+                            expiration: putShort.expiration, // Assume aligned expirations
+
+                            // Strikes
+                            strike_short: putShort.strike,   // Vente Put
+                            strike_long: putLong.strike,     // Achat Put
+                            strike_call_short: callShort.strike, // Vente Call
+                            strike_call_long: callLong.strike,   // Achat Call
+
+                            price: (putShort.open_price || 0) + (callShort.open_price || 0), // Total Credit
+                            quantity: putShort.quantity,
+                            status: putShort.status // Global status
+                        });
+                    }
+                } else {
+                    // Standard PCS (Put Credit Spread): 2 Legs
+                    const shortLeg = legs.find(l => l.side === 'short');
+                    const longLeg = legs.find(l => l.side === 'long');
+                    if (shortLeg && longLeg) {
+                        processedTrades.push({
+                            id: trade.id,
+                            date: trade.date,
+                            open_date: trade.open_date || trade.date,
+                            symbol: trade.symbol,
+                            strategy: trade.strategy,
+                            sub_strategy: trade.sub_strategy || 'pcs',
+                            expiration: shortLeg.expiration,
+                            strike_short: shortLeg.strike,
+                            strike_long: longLeg.strike,
+                            price: shortLeg.open_price,
+                            quantity: shortLeg.quantity,
+                            status: shortLeg.status
+                        });
+                    }
                 }
             }
         }

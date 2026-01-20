@@ -94,32 +94,65 @@
             <table v-if="strategyType === 'pcs'" class="trade-table">
                 <thead>
                     <tr>
-                        <th>Date</th>
                         <th>Symbole</th>
+                        <th>Type</th>
                         <th>Statut</th>
-                        <th>Exp.</th>
-                        <th>Short</th>
-                        <th>Long</th>
-                        <th>Prime</th>
-                        <th>Risque Max</th>
-                        <th>Rdt/Risque (%)</th>
+                        <th>Ouvert le</th>
+                        <th>Terme</th>
+                        <th>Vente Put</th>
+                        <th>Achat Put</th>
+                        <th>Vente Call</th>
+                        <th>Achat Call</th>
+                        <th>Strike</th> <!-- Width -->
+                        <th>Cash Bloqué</th>
+                        <th>Nb Contrats</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                         <tr v-if="pcsTrades.length === 0">
-                        <td colspan="10" class="empty-cell">Aucun PCS en cours.</td>
+                        <td colspan="13" class="empty-cell">Aucun PCS en cours.</td>
                     </tr>
                     <tr v-for="trade in pcsTrades" :key="trade.id">
-                        <td>{{ formatDate(trade.date) }}</td>
                         <td>{{ trade.symbol }}</td>
-                        <td>{{ formatStatus(trade.status, 'pcs') }}</td>
+                        <td><span class="type-badge" :class="trade.sub_strategy === 'ic' ? 'ic' : 'pcs'">{{ trade.sub_strategy === 'ic' ? 'Iron Condor' : 'Standard' }}</span></td>
+                        <td>
+                             <select 
+                                :value="trade.status" 
+                                @change="onUpdateStatus(trade, $event.target.value)"
+                                class="status-select"
+                                :class="{'status-pending': trade.status === 'pending', 'status-open': trade.status === 'open'}"
+                            >
+                                <option value="pending">En attente</option>
+                                <option value="open">Ouvert</option>
+                            </select>
+                        </td>
+                         <td>
+                            <input 
+                                type="date" 
+                                :value="trade.open_date || trade.date" 
+                                @change="$emit('update-date', trade, $event.target.value)"
+                                class="date-input-table"
+                            />
+                        </td>
                         <td>{{ formatDate(trade.expiration) }}</td>
-                        <td>{{ trade.strike_short }}</td>
-                        <td>{{ trade.strike_long }}</td>
-                        <td>{{ formatCurrency(trade.price * 100 * trade.quantity) }}</td>
-                        <td>{{ formatCurrency( (Math.abs(trade.strike_short - trade.strike_long) * 100 * trade.quantity) - (trade.price * 100 * trade.quantity) ) }}</td>
-                        <td>{{ ( (trade.price * 100) / ( (Math.abs(trade.strike_short - trade.strike_long) * 100) - (trade.price * 100) ) * 100 ).toFixed(2) }}%</td>
+                        
+                        <!-- Puts -->
+                        <td>{{ trade.strike_short || '-' }}</td>
+                        <td>{{ trade.strike_long || '-' }}</td>
+                        
+                        <!-- Calls -->
+                        <td>{{ trade.strike_call_short || '-' }}</td>
+                        <td>{{ trade.strike_call_long || '-' }}</td>
+
+                        <!-- Strike / Width -->
+                        <td>{{ Math.abs(trade.strike_short - trade.strike_long).toFixed(2) }}</td>
+                        
+                         <!-- Cash Bloqué -->
+                        <td>{{ formatCurrency(Math.abs(trade.strike_short - trade.strike_long) * 100 * trade.quantity) }}</td>
+
+                        <td>{{ trade.quantity }}</td>
+
                         <td class="actions-cell">
                             <button v-if="trade.status !== 'closed'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
                             <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
@@ -343,6 +376,8 @@ function getTypeClass(trade) {
 .type-badge.call_long { background: #2196f3; color: white; } /* Achat Call - Blue */
 .type-badge.hedge { background: #009688; color: white; } /* Hedge - Teal */
 .type-badge.hedge_spread { background: #004d40; color: white; } /* Hedge Spread - Dark Teal */
+.type-badge.ic { background: #ff9800; color: black; } /* Iron Condor - Orange */
+.type-badge.pcs { background: #81d4fa; color: black; } /* Standard PCS - Pastel Blue */
 
 .right-column-lists {
     display: flex;
