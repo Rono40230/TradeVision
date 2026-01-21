@@ -160,12 +160,76 @@
 
     <!-- ROCKETS Form -->
     <div v-if="modelValue === 'rockets'" class="form-content">
-        <p>Nouveaux types de stratégies (Rockets) à venir.</p>
+        <div class="input-group">
+            <label>Type d'actif</label>
+            <select v-model="form.assetType" class="input-field">
+                <option value="Action">Action</option>
+                <option value="ETF">ETF</option>
+                <option value="Crypto">Crypto</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Profil de Risque</label>
+            <select v-model="form.riskProfile" class="input-field">
+                <option value="Peu Risqué">Peu Risqué</option>
+                <option value="Neutre">Neutre</option>
+                <option value="Risqué">Risqué</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Broker</label>
+            <select v-model="form.broker" class="input-field">
+                <option value="IBKR">IBKR</option>
+                <option value="Binance">Binance</option>
+                <option value="Gate.io">Gate.io</option>
+            </select>
+        </div>
+
         <div class="input-group">
             <label>Symbole</label>
-            <input type="text" :value="form.symbol" @input="form.symbol = $event.target.value.toUpperCase()" placeholder="ex: TESLA" class="input-field" />
+            <input type="text" :value="form.symbol" @input="form.symbol = $event.target.value.toUpperCase()" placeholder="ex: BTCUSDT" class="input-field" />
         </div>
-            <button type="button" class="submit-btn" @click="handleSubmit">Enregistrer l'Ordre</button>
+
+        <div class="sub-strategy" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+             <div class="input-group">
+                <label>Entrée Stop</label>
+                <input type="number" v-model.number="form.entryStop" class="input-field" step="any" />
+            </div>
+             <div class="input-group">
+                <label>Entrée Limit</label>
+                <input type="number" v-model.number="form.entryLimit" class="input-field" step="any" />
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Invalidation</label>
+            <input type="number" v-model.number="form.stopLoss" class="input-field" step="any" placeholder="Prix Stop Loss" />
+        </div>
+
+        <div class="quantity-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+             <div class="input-group">
+                <label>Quantité</label>
+                 <input type="number" 
+                    v-model.number="form.quantity"
+                    class="input-field computed-field" 
+                    readonly
+                    step="any"
+                />
+                <small v-if="mmWarning" style="color: #ff9800; display: block; margin-top: 4px;">{{ mmWarning }}</small>
+            </div>
+             <div class="input-group">
+                <label>Montant Position</label>
+                 <input type="text" 
+                    :value="formatCurrency((form.entryStop || form.entryLimit || 0) * form.quantity)"
+                    class="input-field computed-field" 
+                    readonly
+                />
+            </div>
+        </div>
+
+        <button type="button" class="submit-btn" @click="handleSubmit">Enregistrer l'Ordre</button>
     </div>
   </div>
 </template>
@@ -173,6 +237,7 @@
 <script setup>
 import { ref, computed, watchEffect } from 'vue';
 import { initDB } from '../../utils/db.js';
+import { formatCurrency } from '../../utils/rocketUtils.js';
 
 const props = defineProps({
     modelValue: { type: String, required: true }, // strategyType
@@ -185,10 +250,17 @@ const emit = defineEmits(['update:modelValue', 'trade-submitted']);
 const renteSubStrategy = ref('put');
 const croissanceSubStrategy = ref('pcs');
 const errorMsg = ref('');
+const mmWarning = ref('');
 
 const form = ref({
     symbol: '',
     expiry: '',
+    assetType: 'Action',
+    riskProfile: 'Neutre', // Peu Risqué, Neutre, Risqué
+    broker: 'IBKR',
+    stopLoss: null,
+    entryStop: null,
+    entryLimit: null,
     strike: null,
     positionSizePct: 10,
     estimatedYield: null,
@@ -243,11 +315,55 @@ const computedQuantity = computed(() => {
 
     // ROCKETS Logic
     if (props.modelValue === 'rockets') {
-        const allocGrowth = props.account.alloc_growth || 0;
-        if (allocGrowth > 0 && form.value.price > 0) {
-            const tradeBudget = allocGrowth * 0.025; // 2.5%
-            return Math.floor(tradeBudget / form.value.price) || 1;
+        // Reset warning check in watchEffect or utilize side-effect here (bad practice but effective for UI message)
+        // Better to have mmWarning computed elsewhere, but let's try to keep it simple.
+        // We can't set side effects easily in computed without warnings. 
+        // Let's do the calculation here.
+        
+        const capital = props.displayedCapital;
+        const { assetType, riskProfile, entryStop, entryLimit, stopLoss } = form.value;
+        const entry = entryStop || entryLimit; // Prefer stop if both? Usually only one is set.
+        
+        if (!capital || !entry || !stopLoss) return 0;
+
+        // 1. Determine Risk %
+        let riskPct = 0.01; // Default Neutre Action/Crypto
+        if (assetType === 'ETF') {
+            if (riskProfile === 'Peu Risqué') riskPct = 0.02;     // 2%
+            else if (riskProfile === 'Neutre') riskPct = 0.03;    // 3%
+            else if (riskProfile === 'Risqué') riskPct = 0.04;    // 4%
+        } else {
+             // Action / Crypto
+            if (riskProfile === 'Peu Risqué') riskPct = 0.005;    // 0.5%
+            else if (riskProfile === 'Neutre') riskPct = 0.01;    // 1%
+            else if (riskProfile === 'Risqué') riskPct = 0.02;    // 2%
         }
+
+        // 2. Risk Calculation
+        const riskAmount = capital * riskPct;
+        const riskPerShare = Math.abs(entry - stopLoss);
+        
+        if (riskPerShare === 0) return 0;
+
+        let rawQty = riskAmount / riskPerShare;
+
+        // 3. Max Allocation Check (5% of Capital)
+        const maxAlloc = capital * 0.05;
+        const maxQtyByAlloc = maxAlloc / entry;
+
+        let finalQty = rawQty;
+        if (finalQty > maxQtyByAlloc) {
+            finalQty = maxQtyByAlloc;
+        }
+
+        // Rounding
+        if (assetType === 'Crypto') {
+             finalQty = parseFloat(finalQty.toFixed(6));
+        } else {
+             finalQty = Math.floor(finalQty);
+        }
+        
+        return Math.max(finalQty, 0);
     }
 
     return form.value.quantity;
@@ -266,6 +382,41 @@ watchEffect(() => {
    if (isQuantityComputed.value) {
        form.value.quantity = computedQuantity.value;
    } 
+   
+   // MM Warning Logic (Rockets)
+   if (props.modelValue === 'rockets') {
+        mmWarning.value = '';
+        const capital = props.displayedCapital;
+        const { assetType, riskProfile, entryStop, entryLimit, stopLoss } = form.value;
+        const entry = entryStop || entryLimit;
+        
+        if (capital && entry && stopLoss) {
+             let riskPct = 0.01;
+             if (assetType === 'ETF') {
+                if (riskProfile === 'Peu Risqué') riskPct = 0.02;     
+                else if (riskProfile === 'Neutre') riskPct = 0.03;    
+                else if (riskProfile === 'Risqué') riskPct = 0.04;    
+             } else {
+                if (riskProfile === 'Peu Risqué') riskPct = 0.005;    
+                else if (riskProfile === 'Neutre') riskPct = 0.01;    
+                else if (riskProfile === 'Risqué') riskPct = 0.02;    
+             }
+             
+            const riskAmount = capital * riskPct;
+            const riskPerShare = Math.abs(entry - stopLoss);
+            
+            if (riskPerShare > 0) {
+                 const rawQty = riskAmount / riskPerShare; // Exact Quantity needed for risk
+                 const maxAlloc = capital * 0.05;
+                 const maxQtyByAlloc = maxAlloc / entry;
+                 
+                 // If the calculated risk-based quantity exceeds the 5% capital allocation cap
+                 if (rawQty > maxQtyByAlloc) {
+                     mmWarning.value = `Plafonné à 5% du capital (${maxAlloc.toFixed(0)} $)`;
+                 }
+            }
+        }
+   }
 });
 
 async function handleSubmit() {
@@ -299,10 +450,32 @@ async function handleSubmit() {
         const posSize = payload.form.positionSizePct || 0;
         const qC = payload.quantityToInsert;
         
+        // Determine initial status
+        let initialStatus = 'open';
+        if (currentStrategy === 'rockets') {
+             // If no execution price is set, it's a pending order
+             if (!payload.form.price) {
+                 initialStatus = 'pending';
+             }
+        }
+
         // Trade Header
+        // We include Rocket fields in the main INSERT to ensure atomicity
+        const assetType = (currentStrategy === 'rockets') ? payload.form.assetType : null;
+        const broker = (currentStrategy === 'rockets') ? payload.form.broker : null;
+        const stopLoss = (currentStrategy === 'rockets') ? payload.form.stopLoss : null;
+        const entryStop = (currentStrategy === 'rockets') ? payload.form.entryStop : null;
+        const entryLimit = (currentStrategy === 'rockets') ? payload.form.entryLimit : null;
+
         const result = await db.execute(
-            `INSERT INTO trades (account_id, date, open_date, symbol, strategy, sub_strategy, status, target_yield, position_size_pct, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, datetime('now'))`,
-            [props.account.id, today, today, payload.form.symbol.toUpperCase(), currentStrategy, payload.subStrategy, targetYield, posSize]
+            `INSERT INTO trades 
+            (account_id, date, open_date, symbol, strategy, sub_strategy, status, target_yield, position_size_pct, 
+             asset_type, broker, stop_loss, entry_stop, entry_limit, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+            [
+                props.account.id, today, today, payload.form.symbol.toUpperCase(), currentStrategy, payload.subStrategy, initialStatus, targetYield, posSize,
+                assetType, broker, stopLoss, entryStop, entryLimit
+            ]
         );
         const tradeId = result.lastInsertId;
         let cashImpact = 0;
@@ -414,12 +587,21 @@ async function handleSubmit() {
         }
         // --- ROCKETS ---
         else if (currentStrategy === 'rockets') {
+             // Fields already inserted in main INSERT
+
+             // If pending, price is 0 for now (or entry price if known but not executed).
+             // If open, price is execution price.
+             const legPrice = initialStatus === 'open' ? payload.form.price : 0;
+
              await db.execute(
                 `INSERT INTO legs (trade_id, type, side, quantity, open_price, status) 
-                 VALUES (?, 'stock', 'long', ?, ?, 'open')`,
-                [tradeId, qC, payload.form.price]
+                 VALUES (?, 'stock', 'long', ?, ?, ?)`,
+                [tradeId, qC, legPrice, initialStatus]
             );
-            cashImpact = payload.form.price * qC;
+            
+            if (initialStatus === 'open') {
+                cashImpact = payload.form.price * qC;
+            }
         }
 
         if (cashImpact > 0) {
@@ -441,6 +623,7 @@ function resetForm() {
     form.value.strike = null; form.value.strikeShort = null; form.value.strikeLong = null;
     form.value.strikeCallShort = null; form.value.strikeCallLong = null;
     form.value.estimatedYield = null;
+    form.value.stopLoss = null; form.value.entryStop = null; form.value.entryLimit = null;
     errorMsg.value = '';
 }
 </script>

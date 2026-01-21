@@ -13,13 +13,7 @@
         <span class="label">Cash Dispo</span>
         <span class="value">{{ formatCurrency(displayedCapital - account.cash_used) }}</span>
       </div>
-      <div class="mm-item">
-        <span class="label">P&L Latent</span>
-        <span class="value pl" :class="{ positive: plLatent >= 0, negative: plLatent < 0 }">
-          {{ formatCurrency(plLatent) }}
-        </span>
-      </div>
-      <div class="mm-item">
+      <div class="mm-item" v-if="strategyLabel === 'Wheel'">
         <span class="label">Prime Attendue</span>
         <span class="value">{{ formatCurrency(totalExpectedPremium) }}</span>
       </div>

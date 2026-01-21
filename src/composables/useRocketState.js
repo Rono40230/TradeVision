@@ -28,6 +28,13 @@ export function useRocketState() {
             try {
                 await db.value.execute("ALTER TABLE trades ADD COLUMN sub_strategy TEXT");
             } catch (e) {}
+            // Migration for Rockets specific fields
+            try { await db.value.execute("ALTER TABLE trades ADD COLUMN asset_type TEXT"); } catch (e) {}
+            try { await db.value.execute("ALTER TABLE trades ADD COLUMN broker TEXT"); } catch (e) {}
+            try { await db.value.execute("ALTER TABLE trades ADD COLUMN stop_loss REAL"); } catch (e) {}
+            try { await db.value.execute("ALTER TABLE trades ADD COLUMN entry_stop REAL"); } catch (e) {}
+            try { await db.value.execute("ALTER TABLE trades ADD COLUMN entry_limit REAL"); } catch (e) {}
+
             await loadAccountData();
             await loadActiveTrades();
         } catch (e) {
@@ -62,6 +69,9 @@ export function useRocketState() {
         const query = `
             SELECT 
                 t.id as trade_id, t.date, t.open_date, t.symbol, t.strategy, t.sub_strategy, t.target_yield, t.position_size_pct,
+                t.asset_type, t.broker, t.stop_loss, t.entry_stop, t.entry_limit,
+                t.exit_partial_price, t.exit_partial_date, t.exit_partial_quantity, t.trailing_stop,
+                t.entry_executed, t.exit_price, t.exit_date, t.profit_loss,
                 l.id as leg_id, l.type, l.side, l.strike, l.expiration, l.open_price, l.open_date as leg_open_date, l.quantity, l.status
             FROM legs l
             JOIN trades t ON l.trade_id = t.id
@@ -81,8 +91,21 @@ export function useRocketState() {
                     symbol: row.symbol,
                     strategy: row.strategy,
                     sub_strategy: row.sub_strategy,
+                    asset_type: row.asset_type,
+                    broker: row.broker,
+                    stop_loss: row.stop_loss,
+                    entry_stop: row.entry_stop,
+                    entry_limit: row.entry_limit,
                     target_yield: row.target_yield,
                     position_size_pct: row.position_size_pct,
+                    exit_partial_price: row.exit_partial_price,
+                    exit_partial_date: row.exit_partial_date,
+                    exit_partial_quantity: row.exit_partial_quantity,
+                    trailing_stop: row.trailing_stop,
+                    entry_executed: row.entry_executed,
+                    exit_price: row.exit_price,
+                    exit_date: row.exit_date,
+                    profit_loss: row.profit_loss,
                     legs: []
                 });
             }
@@ -93,7 +116,7 @@ export function useRocketState() {
         for (const trade of tradesMap.values()) {
             const legs = trade.legs;
             
-            if (trade.strategy === 'wheel' || trade.strategy === 'rockets') {
+            if (trade.strategy === 'wheel') {
                  if (trade.sub_strategy === 'hedge_spread') {
                      // HEDGE SPREAD Consolidé
                      const longLeg = legs.find(l => l.side === 'long');
@@ -205,6 +228,38 @@ export function useRocketState() {
                     }
                 }
             }
+             else if (trade.strategy === 'rockets') {
+                 // Rockets trade (usually 1 leg stock long, but need details from Trade table)
+                 const mainLeg = legs[0]; // Assume first leg carries status
+                 if(mainLeg) {
+                     processedTrades.push({
+                        id: mainLeg.leg_id, // Use Leg ID for actions (important for updates/deletes targeting leg table)
+                        trade_id: trade.id, // Keep reference to header
+                        date: trade.date,
+                        open_date: trade.open_date || trade.date,
+                        symbol: trade.symbol,
+                        strategy: trade.strategy,
+                        asset_type: trade.asset_type,
+                        broker: trade.broker,
+                        stop_loss: trade.stop_loss,
+                        entry_stop: trade.entry_stop,
+                        entry_limit: trade.entry_limit,
+                        
+                        exit_partial_price: trade.exit_partial_price,
+                        exit_partial_date: trade.exit_partial_date,
+                        exit_partial_quantity: trade.exit_partial_quantity,
+                        trailing_stop: trade.trailing_stop,
+                        entry_executed: trade.entry_executed,
+                        exit_price: trade.exit_price,
+                        exit_date: trade.exit_date,
+                        profit_loss: trade.profit_loss,
+
+                        price: mainLeg.open_price, // Execute price
+                        quantity: mainLeg.quantity,
+                        status: mainLeg.status
+                    });
+                 }
+            }
         }
 
         processedTrades.sort((a, b) => {
@@ -302,6 +357,16 @@ export function useRocketState() {
     const activeTradesPcs = computed(() => allActiveTrades.value.filter(t => t.strategy === 'pcs' && (t.status === 'open' || t.status === 'pending')));
     const activeTradesRockets = computed(() => allActiveTrades.value.filter(t => t.strategy === 'rockets' && (t.status === 'open' || t.status === 'pending' || t.status === 'neutralized')));
 
+    const rocketsTrades = computed(() => {
+        const trades = allActiveTrades.value.filter(t => t.strategy === 'rockets');
+        return {
+            pending: trades.filter(t => t.status === 'pending'),
+            risk: trades.filter(t => t.status === 'open'),
+            neutralized: trades.filter(t => t.status === 'neutralized'),
+            closed: trades.filter(t => t.status === 'closed')
+        };
+    });
+
     const currentActiveTrades = computed(() => {
         if (strategyType.value === 'wheel') return wheelOptions.value;
         if (strategyType.value === 'pcs') return activeTradesPcs.value;
@@ -348,12 +413,76 @@ export function useRocketState() {
         return '';
     });
 
+    const strategyCashUsed = computed(() => {
+        let used = 0;
+        const trades = allActiveTrades.value.filter(t => 
+            t.strategy === strategyType.value && 
+            (t.status === 'open' || t.status === 'pending' || t.status === 'neutralized')
+        );
+
+        trades.forEach(t => {
+            if (strategyType.value === 'wheel') {
+                // Cash Secured Put
+                if (t.type === 'put' && t.side === 'short') {
+                    used += t.strike * 100 * t.quantity;
+                }
+                // Assigned Stock or Long Strategy
+                else if (t.side === 'long' || t.type === 'stock') {
+                     // Prefer executed price, fallback to planned price
+                     const price = t.entry_executed || t.entry_price || t.price || 0;
+                     used += price * 100 * t.quantity; 
+                }
+            }
+            else if (strategyType.value === 'pcs') {
+                // Vertical Spread Risk = Width * 100 * Qty
+                if (t.sub_strategy === 'ic') {
+                     // Iron Condor Risk = Max width of either side
+                     const widthPut = Math.abs((t.strike_short || 0) - (t.strike_long || 0));
+                     const widthCall = Math.abs((t.strike_call_short || 0) - (t.strike_call_long || 0));
+                     used += Math.max(widthPut, widthCall) * 100 * t.quantity;
+                } else {
+                     const width = Math.abs((t.strike_short || 0) - (t.strike_long || 0));
+                     used += width * 100 * t.quantity;
+                }
+            }
+            else if (strategyType.value === 'rockets') {
+                 // Stock/Crypto Long
+                 const price = t.entry_executed || t.entry_price || t.price || 0;
+                 used += price * t.quantity; // Crypto might not be x100, but logic assumes quantity handles it? 
+                 // Note: Rockets usually stocks/crypto directly. If 'stock', logic above usually x100? 
+                 // Let's assume quantity is raw units and price is unit price. 
+                 // If asset_type is crypto, maybe no multiplier? 
+                 // For now, simple P*Q. (Wheel logic used x100, checking Rockets logic...)
+                 // Rockets trade entry usually doesn't enforce x100.
+            }
+        });
+        return used;
+    });
+
+    const strategyPL = computed(() => {
+        // Returns Total Realized P&L for the active strategy
+        const trades = allActiveTrades.value.filter(t => 
+            t.strategy === strategyType.value && 
+            t.profit_loss !== null && t.profit_loss !== undefined
+        );
+        return trades.reduce((sum, t) => sum + t.profit_loss, 0);
+    });
+
     // Calendar
     const calendarEvents = computed(() => {
+        // Filter by Strategy Type first
+        if (strategyType.value === 'rockets') return [];
+
         const events = [];
         const now = new Date();
         now.setHours(0,0,0,0);
-        const tradesWithExpiry = allActiveTrades.value.filter(t => t.expiration && (t.status === 'open' || t.status === 'pending'));
+
+        const tradesWithExpiry = allActiveTrades.value.filter(t => 
+            t.expiration && 
+            (t.status === 'open' || t.status === 'pending') &&
+            t.strategy === strategyType.value
+        );
+
         const map = new Map();
 
         tradesWithExpiry.forEach(t => {
@@ -527,6 +656,93 @@ export function useRocketState() {
         }
     }
 
+    // -- New Rocket Lifecycle Methods --
+    
+    async function activateTrade(tradeId, entryPrice, entryDate) {
+        if (!db.value) return;
+        try {
+            await db.value.execute(`
+                UPDATE trades 
+                SET entry_executed = ?, open_date = ?, status = 'open' 
+                WHERE id = ?`, 
+                [entryPrice, entryDate, tradeId]
+            );
+
+            // Also update legs status
+            await db.value.execute(`UPDATE legs SET status = 'open', open_price = ?, open_date = ? WHERE trade_id = ?`, 
+                [entryPrice, entryDate, tradeId]
+            );
+
+            await loadActiveTrades();
+            await syncCashUsed();
+        } catch(e) { /* Silent error */ }
+    }
+
+    async function neutralizeTrade(tradeId, exitPartialPrice, exitPartialDate, exitPartialQty) {
+        if (!db.value) return;
+        try {
+            await db.value.execute(`
+                UPDATE trades 
+                SET status = 'neutralized', 
+                    exit_partial_price = ?, 
+                    exit_partial_date = ?, 
+                    exit_partial_quantity = ?
+                WHERE id = ?`, 
+                [exitPartialPrice, exitPartialDate, exitPartialQty, tradeId]
+            );
+            
+            await db.value.execute(`UPDATE legs SET status = 'neutralized' WHERE trade_id = ?`, [tradeId]);
+
+            await loadActiveTrades();
+            await syncCashUsed();
+        } catch(e) { /* Silent error */ }
+    }
+
+    async function closeTrade(tradeId, exitPrice, exitDate) {
+        if (!db.value) return;
+        try {
+            // Get trade info for P&L
+            const result = await db.value.select("SELECT * FROM trades WHERE id = ?", [tradeId]);
+            if (result.length > 0) {
+                const t = result[0];
+                // For rockets, we assume single leg structure
+                const legs = await db.value.select("SELECT quantity, open_price FROM legs WHERE trade_id = ? LIMIT 1", [tradeId]);
+                const leg = legs.length > 0 ? legs[0] : { quantity: 0, open_price: 0 };
+                
+                const totalQty = leg.quantity;
+                // Fallback to leg open_price if trade.entry_executed is missing
+                const entry = t.entry_executed || leg.open_price || 0;
+                
+                // Calculate P&L
+                let realizedPL = 0;
+                
+                // 1. Partial Exit Part (if any)
+                if (t.exit_partial_price && t.exit_partial_quantity) {
+                     realizedPL += (t.exit_partial_price - entry) * t.exit_partial_quantity;
+                }
+                
+                // 2. Remaining Part
+                const remainingQty = totalQty - (t.exit_partial_quantity || 0);
+                realizedPL += (exitPrice - entry) * remainingQty;
+
+                await db.value.execute(`
+                    UPDATE trades 
+                    SET status = 'closed', 
+                        exit_price = ?, 
+                        exit_date = ?,
+                        profit_loss = ?
+                    WHERE id = ?`, 
+                    [exitPrice, exitDate, realizedPL, tradeId]
+                );
+
+                await db.value.execute(`UPDATE legs SET status = 'closed', close_price = ? WHERE trade_id = ?`, [exitPrice, tradeId]);
+
+                await loadActiveTrades();
+                await syncCashUsed();
+            }
+        } catch(e) { /* Silent error */ }
+    }
+
     async function deleteTrade(trade) {
         tradeToDelete.value = trade;
         showDeleteModal.value = true;
@@ -541,6 +757,27 @@ export function useRocketState() {
             // Also update main trade open_date if it matches (optional but good for consistency)
             await db.value.execute("UPDATE trades SET open_date = ? WHERE id = ?", [newDate, trade.trade_id]);
             
+            await loadActiveTrades();
+        } catch (e) {
+            // Silent error
+        }
+    }
+
+    async function updateTradeQuantity(trade, newQuantity) {
+        if (!trade || !newQuantity) return;
+        try {
+            // Update Leg quantity
+            await db.value.execute("UPDATE legs SET quantity = ? WHERE id = ?", [newQuantity, trade.id]);
+            await loadActiveTrades();
+        } catch (e) {
+            // Silent error
+        }
+    }
+
+    async function updateTrailingStop(trade, newStop) {
+        if (!trade || !newStop) return;
+        try {
+            await db.value.execute("UPDATE trades SET trailing_stop = ? WHERE id = ?", [newStop, trade.trade_id]);
             await loadActiveTrades();
         } catch (e) {
             // Silent error
@@ -585,10 +822,12 @@ export function useRocketState() {
         showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate, showDeleteModal, tradeToDelete,
         // Methods
         init, loadAccountData, loadActiveTrades, saveMMSettings, updateTotalCapital,
-        assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted, deleteTrade, confirmDeleteTrade, updateTradeDate,
+        assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted, deleteTrade, confirmDeleteTrade, updateTradeDate, updateTradeQuantity, updateTrailingStop,
+        activateTrade, neutralizeTrade, closeTrade,
         // Computed
-        displayedCapital, activeTradesWheel, wheelOptions, wheelStocks, activeTradesPcs, activeTradesRockets,
+        displayedCapital, activeTradesWheel, wheelOptions, wheelStocks, activeTradesPcs, activeTradesRockets, rocketsTrades,
         currentActiveTrades, currentAssignedTrades, strategyLabel, calendarEvents,
-        wheelStats, pcsStats, rocketsStats, mmStatusText, mmStatusColor, totalExpectedPremium
+        wheelStats, pcsStats, rocketsStats, mmStatusText, mmStatusColor, totalExpectedPremium,
+        strategyCashUsed, strategyPL
     };
 }

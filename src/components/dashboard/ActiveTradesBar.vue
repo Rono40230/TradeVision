@@ -37,6 +37,10 @@ defineProps({
             <div class="breakdown-pill"><span>Rockets Action</span><strong>{{ breakdown.rockets_stock }}</strong></div>
             <div class="breakdown-pill"><span>Rockets Crypto</span><strong>{{ breakdown.rockets_crypto }}</strong></div>
         </div>
+        
+        <div style="flex: 1;"></div>
+        
+        <button class="settings-btn" @click="$emit('open-settings')">⚙️ Paramétrer le MM</button>
     </div>
 </template>
 
@@ -108,5 +112,22 @@ defineProps({
 .breakdown-pill strong {
     color: var(--text-color);
     font-weight: 600;
+}
+
+.settings-btn {
+    background: var(--accent-color);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: background 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    white-space: nowrap;
+}
+.settings-btn:hover {
+    background: var(--accent-hover);
 }
 </style>

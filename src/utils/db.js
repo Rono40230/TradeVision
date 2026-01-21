@@ -54,6 +54,15 @@ export async function initDB() {
   try { await db.execute("ALTER TABLE trades ADD COLUMN target_yield REAL DEFAULT 0"); } catch(e) {}
   try { await db.execute("ALTER TABLE trades ADD COLUMN position_size_pct REAL DEFAULT 0"); } catch(e) {}
   
+  // New columns for Rocket Lifecycle (Pending -> Open -> Neutralized -> Closed)
+  try { await db.execute("ALTER TABLE trades ADD COLUMN exit_partial_price REAL"); } catch(e) {}
+  try { await db.execute("ALTER TABLE trades ADD COLUMN exit_partial_date TEXT"); } catch(e) {}
+  try { await db.execute("ALTER TABLE trades ADD COLUMN exit_partial_quantity REAL"); } catch(e) {}
+  try { await db.execute("ALTER TABLE trades ADD COLUMN trailing_stop REAL"); } catch(e) {}
+  try { await db.execute("ALTER TABLE trades ADD COLUMN entry_executed REAL"); } catch(e) {}
+  try { await db.execute("ALTER TABLE trades ADD COLUMN exit_price REAL"); } catch(e) {}
+  try { await db.execute("ALTER TABLE trades ADD COLUMN exit_date TEXT"); } catch(e) {}
+
   // Add open_date to legs to track assignment dates separately
   try { await db.execute("ALTER TABLE legs ADD COLUMN open_date TEXT"); } catch(e) {}
 

@@ -2,7 +2,7 @@
   <div class="right-column-lists">
       <!-- Active Trades Block -->
       <div class="active-trades-block">
-        <h3>Trades en Cours</h3>
+        <h3 v-if="strategyType !== 'rockets'">Trades en Cours</h3>
         <div class="table-container">
             
                 <!-- WHEEL/OPTIONS TABLE -->
@@ -161,42 +161,258 @@
                 </tbody>
             </table>
 
-                <!-- ROCKETS TABLE -->
-            <table v-if="strategyType === 'rockets'" class="trade-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Symbole</th>
-                        <th>Statut</th>
-                        <th>Sens</th>
-                        <th>Prix Entrée</th>
-                        <th>Qté</th>
-                        <th>Prix Actuel</th>
-                        <th>P&L Latent</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                        <tr v-if="rocketsTrades.length === 0">
-                        <td colspan="9" class="empty-cell">Aucun trade Rocket en cours.</td>
-                    </tr>
-                    <tr v-for="trade in rocketsTrades" :key="trade.id">
-                        <td>{{ formatDate(trade.date) }}</td>
-                        <td>{{ trade.symbol }}</td>
-                        <td>{{ formatStatus(trade.status, 'rockets') }}</td>
-                        <td><span class="badge" :class="trade.side">{{ trade.side }}</span></td>
-                        <td>{{ formatCurrency(trade.entry_price) }}</td>
-                        <td>{{ trade.quantity }}</td>
-                        <td>--</td>
-                        <td>--</td>
-                        <td class="actions-cell">
-                            <button v-if="trade.status === 'open'" class="action-btn neutral-btn" @click="onUpdateStatus(trade, 'neutralized')">Neutraliser</button>
-                            <button v-if="trade.status !== 'closed'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
-                            <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <!-- ROCKETS TABLES -->
+            <div v-if="strategyType === 'rockets'" class="rockets-container">
+                
+                <!-- 1. PENDING (SAISIE) -->
+                <div class="rocket-section pending">
+                    <h4 class="section-title">Trades en attente d'exécution</h4>
+                    <table class="trade-table compact">
+                        <thead>
+                            <tr>
+                                <th>Symbole</th>
+                                <th>Type</th>
+                                <th>Broker</th>
+                                <th>Invalidation</th>
+                                <th>Trailing Stop (Init)</th>
+                                <th>Risque</th>
+                                <th>Entrée Stop</th>
+                                <th>Nb Actions</th>
+                                <th>Date de saisie</th>
+                                <th>Montant Position</th>
+                                <th>Entrée Limite</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!rocketsTrades.pending || rocketsTrades.pending.length === 0">
+                                <td colspan="12" class="empty-cell">Aucun ordre en attente.</td>
+                            </tr>
+                            <tr v-for="trade in rocketsTrades.pending" :key="trade.id">
+                                <td class="symbol-col">
+                                    <span class="symbol-badge">{{ trade.symbol }}</span>
+                                </td>
+                                <td><span class="type-badge" :class="getAssetClass(trade.asset_type)">{{ trade.asset_type }}</span></td>
+                                <td>{{ trade.broker }}</td>
+                                <!-- Invalidation -->
+                                <td class="negative-text">{{ formatPrice(trade.stop_loss, trade.asset_type) }}</td>
+                                <!-- Trailing Stop = Invalidation at opening -->
+                                <td>{{ formatPrice(trade.stop_loss, trade.asset_type) }}</td>
+                                <!-- Risque Calc -->
+                                <td>
+                                    {{ calculateRiskPercentage(trade) }}%
+                                </td>
+                                <!-- Entrée Stop -->
+                                <td>{{ trade.entry_stop ? formatPrice(trade.entry_stop, trade.asset_type) : '-' }}</td>
+                                <!-- Nb Actions (Editable) -->
+                                <td>
+                                    <input 
+                                        type="number" 
+                                        :value="trade.quantity" 
+                                        @change="$emit('update-quantity', trade, $event.target.value)"
+                                        class="quantity-input-table"
+                                    />
+                                </td>
+                                <!-- Date de saisie -->
+                                <td>{{ formatDate(trade.date) }}</td>
+                                <!-- Montant Position -->
+                                <td>{{ formatCurrency((trade.entry_stop || trade.entry_limit) * trade.quantity) }}</td>
+                                <!-- Entrée Limite -->
+                                <td>{{ trade.entry_limit ? formatPrice(trade.entry_limit, trade.asset_type) : '-' }}</td>
+
+                                <td class="actions-cell">
+                                    <button class="action-btn success-btn" @click="$emit('activate-rocket', trade)" title="Trade ouvert">Trade ouvert</button>
+                                    <button class="action-btn delete-btn" @click="$emit('delete', trade)">🗑️</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 2. RISK (OUVERT) -->
+                <div class="rocket-section risk">
+                    <h4 class="section-title">Trades ouverts à risque</h4>
+                    <table class="trade-table compact">
+                        <thead>
+                            <tr>
+                                <th>Symbole</th>
+                                <th>Type</th>
+                                <th>Broker</th>
+                                <th>Entrée</th>
+                                <th>Ouverture</th>
+                                <th>Trailing Stop</th>
+                                <th>Nb Actions</th>
+                                <th>R1</th>
+                                <th>Vente R1</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!rocketsTrades.risk || rocketsTrades.risk.length === 0">
+                                <td colspan="10" class="empty-cell">Aucune position en risque.</td>
+                            </tr>
+                            <tr v-for="trade in rocketsTrades.risk" :key="trade.id">
+                                <td class="symbol-col">
+                                    <span class="symbol-badge">{{ trade.symbol }}</span>
+                                </td>
+                                <td><span class="type-badge" :class="getAssetClass(trade.asset_type)">{{ trade.asset_type }}</span></td>
+                                <td>{{ trade.broker }}</td>
+                                
+                                <!-- Entrée Execution -->
+                                <td>{{ formatPrice(trade.entry_executed || trade.price, trade.asset_type) }}</td>
+                                
+                                <!-- Date Ouverture -->
+                                <td>
+                                    <input type="date" :value="trade.open_date" @change="$emit('update-date', trade, $event.target.value)" class="date-input-table" />
+                                </td>
+                                
+                                <!-- Trailing Stop -->
+                                <td>
+                                    <input 
+                                        type="number" 
+                                        step="any"
+                                        :value="trade.trailing_stop || trade.stop_loss" 
+                                        @change="$emit('update-trailing-stop', trade, $event.target.value)"
+                                        class="quantity-input-table"
+                                        style="width: 80px;"
+                                    />
+                                </td>
+
+                                <!-- Nb Actions -->
+                                <td>{{ trade.quantity }}</td>
+                                
+                                <!-- R1 = Entry + (Entry - Stop) -->
+                                <td>
+                                    {{ formatPrice(
+                                        (trade.entry_executed || trade.price || 0) + 
+                                        Math.abs((trade.entry_executed || trade.price || 0) - (trade.stop_loss || 0)), 
+                                        trade.asset_type
+                                    ) }}
+                                </td>
+                                
+                                <!-- Vente R1 (Quantity / 2) -->
+                                <td>{{ parseFloat((trade.quantity / 2).toFixed(2)) }}</td>
+
+                                <td class="actions-cell">
+                                    <button class="action-btn  neutral-btn" @click="$emit('neutralize-rocket', trade)" title="Vendre 50% et Sécuriser">Trade neutralisé</button>
+                                    <button class="action-btn close-btn" @click="$emit('close-rocket', trade)" title="Clôturer la position">Clôturer</button>
+                                    <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 3. NEUTRALIZED (FREE RIDE) -->
+                
+                    <div class="rocket-section neutralized">
+                    <h4 class="section-title">Trades ouverts neutralisés</h4>
+                    <table class="trade-table compact">
+                        <thead>
+                            <tr>
+                                <th>Symbole</th>
+                                <th>Type</th>
+                                <th>Broker</th>
+                                <th>Trailing Stop</th>
+                                <th>Nb Actions restante</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="!rocketsTrades.neutralized || rocketsTrades.neutralized.length === 0">
+                                <td colspan="6" class="empty-cell">Aucune position neutralisée.</td>
+                            </tr>
+                            <tr v-for="trade in rocketsTrades.neutralized" :key="trade.id">
+                                <td class="symbol-col">
+                                    <span class="symbol-badge">{{ trade.symbol }}</span>
+                                </td>
+                                <td><span class="type-badge" :class="getAssetClass(trade.asset_type)">{{ trade.asset_type }}</span></td>
+                                <td>{{ trade.broker }}</td>
+                                
+                                <!-- Trailing Stop (Editable) -->
+                                <td>
+                                    <input 
+                                        type="number" 
+                                        step="any"
+                                        :value="trade.trailing_stop || trade.stop_loss" 
+                                        @change="$emit('update-trailing-stop', trade, $event.target.value)"
+                                        class="quantity-input-table"
+                                        style="width: 90px;"
+                                    />
+                                </td>
+
+                                <!-- Reste -->
+                                <td>{{ trade.quantity - (trade.exit_partial_quantity || 0) }}</td>
+                                
+                                <td class="actions-cell">
+                                    <button class="action-btn close-btn" @click="$emit('close-rocket', trade)">Trade clôturé</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                 <!-- 4. RECENTLY CLOSED -->
+                <div class="rocket-section closed">
+                    <h4 class="section-title">Trades clôturés</h4>
+                    <table class="trade-table compact">
+                        <thead>
+                            <tr>
+                                <th>Symbole</th>
+                                <th>Type</th>
+                                <th>Broker</th>
+                                <th>Ouverture</th>
+                                <th>Clôture</th>
+                                <th>PV/MV</th>
+                                <th>RR</th>
+                                <th>Perf. Cumulée</th>
+                                <th>% Perf</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                             <tr v-if="closedTradesWithStats.length === 0">
+                                <td colspan="10" class="empty-cell">Aucun trade clôturé récemment.</td>
+                            </tr>
+                            <tr v-for="trade in closedTradesWithStats" :key="trade.id">
+                                <td class="symbol-col">
+                                    <span class="symbol-badge">{{ trade.symbol }}</span>
+                                </td>
+                                <td><span class="type-badge" :class="getAssetClass(trade.asset_type)">{{ trade.asset_type }}</span></td>
+                                <td>{{ trade.broker }}</td>
+                                <td>{{ formatDate(trade.open_date) }}</td>
+                                <td>{{ formatDate(trade.exit_date) }}</td>
+                                
+                                <!-- PV/MV -->
+                                <td :class="trade.profit_loss >= 0 ? 'positive-text' : 'negative-text'">
+                                    {{ formatCurrency(trade.profit_loss) }}
+                                </td>
+
+                                <!-- RR -->
+                                <td :class="(parseFloat(trade.rr) >= 0) ? 'positive-text' : 'negative-text'">
+                                     {{ trade.rr === '-' ? '-' : trade.rr + ' R' }}
+                                </td>
+
+                                 <!-- Cumulative -->
+                                 <td :class="trade.cumulative >= 0 ? 'positive-text' : 'negative-text'">
+                                    {{ formatCurrency(trade.cumulative) }}
+                                </td>
+
+                                <!-- % Perf -->
+                                <td :class="parseFloat(trade.perf_pct) >= 0 ? 'positive-text' : 'negative-text'">
+                                    {{ trade.perf_pct }}%
+                                </td>
+
+                                <td class="actions-cell">
+                                     <button class="action-btn delete-btn" @click="$emit('delete', trade)">🗑️</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+
         </div>
     </div>
 
@@ -279,7 +495,7 @@
 </style>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { formatCurrency, formatDate } from '../../utils/rocketUtils.js';
 import CoveredCallModal from './CoveredCallModal.vue';
 
@@ -287,15 +503,87 @@ const props = defineProps({
     strategyType: { type: String, required: true },
     wheelOptions: { type: Array, default: () => [] },
     pcsTrades: { type: Array, default: () => [] },
-    rocketsTrades: { type: Array, default: () => [] },
+    rocketsTrades: { type: [Array, Object], default: () => ({ pending: [], risk: [], neutralized: [], closed: [] }) },
     assignedTrades: { type: Array, default: () => [] },
     account: { type: Object, default: () => ({ id: null }) }
 });
 
-const emit = defineEmits(['update-status', 'assign', 'delete', 'update-date', 'refresh-data']);
+const closedTradesWithStats = computed(() => {
+    if (!props.rocketsTrades || !props.rocketsTrades.closed) return [];
+    
+    // Sort by exit date ASC to calculate running total properly
+    const closed = [...props.rocketsTrades.closed].sort((a, b) => {
+        const dateA = new Date(a.exit_date || a.date).getTime();
+        const dateB = new Date(b.exit_date || b.date).getTime();
+        return dateA - dateB;
+    });
+
+    let runningTotal = 0;
+    const enriched = closed.map(t => {
+        const pl = t.profit_loss || 0;
+        runningTotal += pl;
+
+        const entry = t.entry_executed || t.price || 0;
+        const stop = t.stop_loss || 0;
+        // Caution: t.quantity might be current quantity. If it was partial exited, we ideally need original.
+        // Assuming t.quantity is leg quantity which is initial.
+        const qty = t.quantity || 0;
+        
+        // RR Calculation
+        let rr = '-';
+        if (entry > 0 && stop > 0 && qty > 0) {
+            const riskPerShare = Math.abs(entry - stop);
+            const totalRisk = riskPerShare * qty;
+            if (totalRisk > 0.01) { // Avoid div by zero
+                rr = (pl / totalRisk).toFixed(2);
+            }
+        }
+
+        // Perf % (ROI)
+        let perfPct = '0.00';
+        if (entry > 0 && qty > 0) {
+            const invested = entry * qty;
+            perfPct = ((pl / invested) * 100).toFixed(2);
+        }
+
+        return {
+            ...t,
+            cumulative: runningTotal,
+            rr: rr,
+            perf_pct: perfPct
+        };
+    });
+
+    // Return Reversed (Most recent first)
+    return enriched.reverse();
+});
+
+const emit = defineEmits(['update-status', 'assign', 'delete', 'update-date', 'update-quantity', 'update-trailing-stop', 'refresh-data', 'activate-rocket', 'neutralize-rocket', 'close-rocket']);
 
 const showRollModal = ref(false);
 const selectedRollTrade = ref(null);
+
+function getAssetClass(assetType) {
+    if (!assetType) return '';
+    return assetType.toLowerCase();
+}
+
+function formatDecimal(val, decimals = 2) {
+    if (val === null || val === undefined) return '-';
+    return Number(val).toFixed(decimals);
+}
+
+function formatPrice(val, assetType = 'Action') {
+    if (val === null || val === undefined) return '-';
+    // If Crypto, use 8 decimals, else 2
+    const decimals = (assetType === 'Crypto') ? 8 : 2;
+    // Use Intl NumberFormat for currency but override fraction digits
+    return new Intl.NumberFormat('fr-FR', { 
+        style: 'decimal', 
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals 
+    }).format(val) + (assetType === 'Crypto' ? '' : ' $');
+}
 
 function openRollModal(trade) {
     selectedRollTrade.value = trade;
@@ -357,6 +645,23 @@ function getTypeClass(trade) {
     if (trade.type === 'call') return trade.side === 'short' ? 'call' : 'call_long';
     return '';
 }
+
+function calculateRiskPercentage(trade) {
+     // Formula: ((E - SL) / E) * (PositionAmount / RocketCapital) * 100
+     const entry = trade.entry_stop || trade.entry_limit || 0;
+     const stop = trade.stop_loss || 0;
+     const qty = trade.quantity || 0;
+     const capital = props.account.alloc_rocket || 1; // Avoid div by zero
+
+     if (entry === 0 || qty === 0) return 0;
+     
+     const positionAmount = entry * qty;
+     const riskPerSharePct = Math.abs(entry - stop) / entry;
+     const allocationPct = positionAmount / capital;
+     
+     const totalRiskPct = riskPerSharePct * allocationPct * 100;
+     return totalRiskPct.toFixed(2);
+}
 </script>
 
 <style scoped>
@@ -378,6 +683,25 @@ function getTypeClass(trade) {
 .type-badge.hedge_spread { background: #004d40; color: white; } /* Hedge Spread - Dark Teal */
 .type-badge.ic { background: #ff9800; color: black; } /* Iron Condor - Orange */
 .type-badge.pcs { background: #81d4fa; color: black; } /* Standard PCS - Pastel Blue */
+.type-badge.action { background: #607d8b; color: white; } /* Action - Blue Grey */
+.type-badge.etf { background: #9c27b0; color: white; } /* ETF - Purple */
+.type-badge.crypto { background: #f57c00; color: white; } /* Crypto - Orange */
+
+.quantity-input-table {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 70px;
+}
+.quantity-input-table:hover, .quantity-input-table:focus {
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
 
 .right-column-lists {
     display: flex;
@@ -511,4 +835,76 @@ h3 {
     background-color: #4caf50; 
     color: black; 
 }
+
+/* ROCKETS SPECIFIC STYLES */
+.rockets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    padding-bottom: 2rem; /* Add some space at bottom for scrolling */
+}
+
+.rocket-section {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+
+.rocket-section.pending { border-left: 4px solid #2196F3; }
+.rocket-section.risk { border-left: 4px solid #e91e63; } /* Pink/Red Risk */
+.rocket-section.neutralized { border-left: 4px solid #4caf50; }
+.rocket-section.closed { border-left: 4px solid #9e9e9e; opacity: 0.8; }
+
+.section-title {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+}
+
+.section-title {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+}
+
+.symbol-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.symbol-badge {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-color);
+}
+.asset-badge {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.1);
+    padding: 1px 4px;
+    border-radius: 3px;
+    width: fit-content;
+}
+
+.negative-text { color: #fe4d4d; }
+.positive-text { color: #4caf50; }
+
+.success-btn {
+    background: #4caf50;
+    color: white;
+}
+.success-btn:hover { background: #388e3c; }
+
+.warning-btn {
+    background: #ff9800;
+    color: black;
+}
+.warning-btn:hover { background: #f57c00; }
 </style>

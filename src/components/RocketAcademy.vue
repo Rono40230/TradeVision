@@ -4,14 +4,12 @@
       <h1>TradeVision pour la Rocket Academy</h1>
       <div id="header-actions">
         <span class="mm-status-badge" :class="mmStatusColor" v-if="mmStatusText">{{ mmStatusText }}</span>
-        <button class="settings-btn" @click="showSettings = true">⚙️ Paramétrer le MM</button>
       </div>
     </header>
 
     <!-- 1. Money Management Block (Fixed Top) - Extracted Component -->
     <RocketHeader 
-        :account="account"
-        :pl-latent="plLatent"
+        :account="{ ...account, cash_used: strategyCashUsed }"
         :displayed-capital="displayedCapital"
         :strategy-label="strategyLabel"
         :mm-status-text="mmStatusText"
@@ -37,6 +35,8 @@
         @confirm-delete="confirmDeleteTrade"
     />
 
+    <RocketActionModals ref="rocketActionModals" />
+
     <div class="main-layout">
         <!-- 2. Trade Entry Block (Left Column) -->
         <!-- 2. Trade Entry Block (Left Column) - Extracted Component -->
@@ -53,14 +53,19 @@
                 :strategy-type="strategyType"
                 :wheel-options="wheelOptions"
                 :pcs-trades="activeTradesPcs"
-                :rockets-trades="activeTradesRockets"
+                :rockets-trades="rocketsTrades"
                 :assigned-trades="currentAssignedTrades"
                 :account="account"
                 @update-status="(p) => updateStatus(p.trade, p.newStatus)"
                 @assign="assignTrade"
                 @delete="deleteTrade"
                 @update-date="(t, d) => updateTradeDate(t, d)"
+                @update-quantity="(t, q) => updateTradeQuantity(t, q)"
+                @update-trailing-stop="(t, v) => updateTrailingStop(t, v)"
                 @refresh-data="onTradeSubmitted"
+                @activate-rocket="openActivationModal"
+                @neutralize-rocket="openNeutralizationModal"
+                @close-rocket="openClosureModal"
             />
         </div>
     </div>
@@ -68,23 +73,41 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import RocketHeader from './rocket/RocketHeader.vue';
 import TradeEntryForm from './rocket/TradeEntryForm.vue';
 import ActiveTradesList from './rocket/ActiveTradesList.vue';
 import RocketModals from './rocket/RocketModals.vue';
+import RocketActionModals from './rocket/RocketActionModals.vue';
 import { useRocketState } from '../composables/useRocketState.js';
 
 const {
-    account, plLatent, strategyType, mmConfig,
+    account, strategyType, mmConfig,
     showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate,
     init, saveMMSettings, updateTotalCapital, confirmAssignment, confirmStatusUpdate, onTradeSubmitted,
     displayedCapital, strategyLabel, mmStatusText, mmStatusColor, calendarEvents,
-    wheelOptions, activeTradesPcs, activeTradesRockets, currentAssignedTrades,
+    wheelOptions, activeTradesPcs, rocketsTrades, currentAssignedTrades,
     updateStatus, assignTrade, deleteTrade,
     showDeleteModal, tradeToDelete, confirmDeleteTrade,
-    totalExpectedPremium, updateTradeDate
+    totalExpectedPremium, updateTradeDate, updateTradeQuantity, updateTrailingStop,
+    strategyCashUsed, strategyPL
 } = useRocketState();
+
+const rocketActionModals = ref(null);
+
+function openActivationModal(trade) {
+    if (rocketActionModals.value) rocketActionModals.value.openActivation(trade);
+}
+
+function openNeutralizationModal(trade) {
+    if (rocketActionModals.value) rocketActionModals.value.openNeutralization(trade);
+}
+
+function openClosureModal(trade) {
+    if (rocketActionModals.value) rocketActionModals.value.openClosure(trade);
+}
+
+// REMOVED LOCAL STATE AND HANDLERS (Moved to RocketActionModals)
 
 onMounted(async () => {
     await init();

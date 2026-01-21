@@ -4,6 +4,8 @@ import StatCards from "../components/dashboard/StatCards.vue";
 import ActiveTradesBar from "../components/dashboard/ActiveTradesBar.vue";
 import TradeList from "../components/TradeList.vue";
 import PerformanceChart from "../components/PerformanceChart.vue";
+import RocketModals from "../components/rocket/RocketModals.vue";
+import { useRocketState } from '../composables/useRocketState.js';
 
 const props = defineProps({
   db: {
@@ -11,6 +13,13 @@ const props = defineProps({
     default: null
   }
 });
+
+const { 
+    showSettings, mmConfig, 
+    init, saveMMSettings, updateTotalCapital,
+    // Unused but destructured to avoid errors if needed
+    // showAssignModal, ...
+} = useRocketState();
 
 const closedTradesCount = ref(0);
 const openTradesCount = ref(0);
@@ -29,8 +38,9 @@ const breakdown = ref({
 });
 
 // Watch for DB readiness and reload stats
-watch(() => props.db, (newVal) => {
+watch(() => props.db, async (newVal) => {
     if (newVal) {
+        await init(); // Init Rocket State (for MM Config)
         loadStats();
     }
 }, { immediate: true });
@@ -147,11 +157,19 @@ async function loadStats() {
         <ActiveTradesBar
           :open-trades-count="openTradesCount"
           :breakdown="breakdown"
+          @open-settings="showSettings = true"
         />
         
         <TradeList :filter="selectedAsset" @stats-updated="loadStats" />
         <PerformanceChart :filter="selectedAsset" />
       </div>
+
+       <RocketModals
+        v-model:showSettings="showSettings"
+        :mmConfig="mmConfig"
+        @update-capital="updateTotalCapital"
+        @save-mm-settings="saveMMSettings"
+    />
     </div>
   </div>
 </template>
