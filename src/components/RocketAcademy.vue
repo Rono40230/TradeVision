@@ -1,12 +1,5 @@
 <template>
   <div class="rocket-academy">
-    <header>
-      <h1>TradeVision pour la Rocket Academy</h1>
-      <div id="header-actions">
-        <span class="mm-status-badge" :class="mmStatusColor" v-if="mmStatusText">{{ mmStatusText }}</span>
-      </div>
-    </header>
-
     <!-- 1. Money Management Block (Fixed Top) - Extracted Component -->
     <RocketHeader 
         :account="{ ...account, cash_used: strategyCashUsed }"
@@ -122,28 +115,6 @@ onMounted(async () => {
     min-height: 0; /* Allow shrinking below content size */
     overflow: hidden;
     color: var(--text-color);
-}
-
-header {
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-#header-actions {
-    display: flex;
-    gap: 1rem;
-}
-
-h1 {
-  font-size: 1.8rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-color);
-  text-align: left;
 }
 
 /* Main Layout */

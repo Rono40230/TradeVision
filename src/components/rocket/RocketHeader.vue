@@ -21,6 +21,9 @@
     
     <!-- Calendar Events inline (Horizontal) -->
     <div class="mm-calendar-horizontal">
+      <!-- MM Status Badge injected here -->
+      <span class="mm-status-badge" :class="mmStatusColor" v-if="mmStatusText">{{ mmStatusText }}</span>
+
       <span v-if="calendarEvents.length === 0" class="no-events">Aucune échéance</span>
       <div v-for="(event, index) in calendarEvents" :key="index" class="mini-event-item" :class="{ 'urgent': event.dte <= 3 }">
         <span class="mini-date">{{ event.day }} {{ event.month }}</span>
@@ -136,4 +139,17 @@ defineEmits(['open-settings']);
 .dte-badge-mini.critical { background: #f44336; color: white; }
 .dte-badge-mini.warning { background: #ff9800; color: black; }
 .dte-badge-mini.expired { background: #000; color: #f44336; border: 1px solid #f44336; }
+
+.mm-status-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-right: 1rem;
+    color: white;
+    text-transform: uppercase;
+}
+.mm-status-badge.green { background-color: #4caf50; }
+.mm-status-badge.blue { background-color: #2196F3; }
+.mm-status-badge.red { background-color: #f44336; }
 </style>

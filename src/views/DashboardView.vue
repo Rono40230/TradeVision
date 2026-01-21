@@ -2,8 +2,6 @@
 import { ref, watch, onMounted } from 'vue';
 import StatCards from "../components/dashboard/StatCards.vue";
 import ActiveTradesBar from "../components/dashboard/ActiveTradesBar.vue";
-import TradeList from "../components/TradeList.vue";
-import PerformanceChart from "../components/PerformanceChart.vue";
 import RocketModals from "../components/rocket/RocketModals.vue";
 import { useRocketState } from '../composables/useRocketState.js';
 
@@ -143,9 +141,7 @@ async function loadStats() {
 <template>
   <div class="dashboard-view">
     <header>
-      <h1>TradeVision Dashboard</h1>
       <StatCards
-        :closed-trades-count="closedTradesCount"
         :total-profit="totalProfit"
         :win-rate="winRate"
       />
@@ -159,9 +155,6 @@ async function loadStats() {
           :breakdown="breakdown"
           @open-settings="showSettings = true"
         />
-        
-        <TradeList :filter="selectedAsset" @stats-updated="loadStats" />
-        <PerformanceChart :filter="selectedAsset" />
       </div>
 
        <RocketModals

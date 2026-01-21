@@ -1,9 +1,5 @@
 <script setup>
 defineProps({
-  closedTradesCount: {
-    type: Number,
-    required: true
-  },
   totalProfit: {
     type: Number,
     required: true
@@ -18,10 +14,6 @@ defineProps({
 <template>
   <div class="header-stats">
     <div class="mini-stat">
-      <h3>Trades clôturés</h3>
-      <p>{{ closedTradesCount }}</p>
-    </div>
-    <div class="mini-stat">
       <h3>Profit Total</h3>
       <p>{{ totalProfit.toFixed(2) }} €</p>
     </div>
@@ -35,15 +27,15 @@ defineProps({
 <style scoped>
 .header-stats {
     display: flex;
-    gap: 1.5rem;
-    margin-left: auto;
-    margin-right: 2rem;
+    gap: 3rem;
+    justify-content: center;
+    flex: 1;
 }
 
 .mini-stat {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
 }
 
 .mini-stat h3 {
