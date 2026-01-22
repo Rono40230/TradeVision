@@ -1,10 +1,18 @@
 <template>
   <div class="kasper-academy">
-    <KasperMetrics 
-        :account="account" 
-        :metrics="metrics" 
-        @openCapitalModal="showCapModal = true"
-    />
+    <div class="kasper-top-section">
+        <KasperMetrics 
+            class="metrics-panel"
+            :account="account" 
+            :metrics="metrics" 
+            @openCapitalModal="showCapModal = true"
+        />
+        <KasperCapitalChart 
+            class="chart-panel"
+            :account="account"
+            :dailyEntries="dailyEntries"
+        />
+    </div>
 
     <div class="kasper-main-row">
         <KasperMmTable 
@@ -55,6 +63,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useKasperState } from '../composables/useKasperState.js';
 import KasperMetrics from './kasper/KasperMetrics.vue';
+import KasperCapitalChart from './kasper/KasperCapitalChart.vue';
 import KasperMmTable from './kasper/KasperMmTable.vue';
 import KasperProjections from './kasper/KasperProjections.vue';
 import KasperCalendar from './kasper/KasperCalendar.vue';
@@ -133,6 +142,21 @@ async function onSaveCapital(amount) {
     padding: 1rem;
     gap: 1.5rem;
     background-color: var(--bg-color);
+}
+
+.kasper-top-section {
+    display: flex;
+    gap: 1.5rem;
+    height: 160px; /* Fixed height for top section to keep chart stable */
+    min-height: 160px;
+}
+
+.metrics-panel {
+    flex: 2; /* Takes 2/3 of space */
+}
+
+.chart-panel {
+    flex: 1; /* Takes 1/3 of space */
 }
 
 .kasper-main-row {
