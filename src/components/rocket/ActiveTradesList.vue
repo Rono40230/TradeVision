@@ -241,7 +241,9 @@
                                 <th>Entrée</th>
                                 <th>Ouverture</th>
                                 <th>Trailing Stop</th>
+                                <th>Cours actuel</th>
                                 <th>Nb Actions</th>
+                                <th>Montant Position</th>
                                 <th>R1</th>
                                 <th>Vente R1</th>
                                 <th>Actions</th>
@@ -249,7 +251,7 @@
                         </thead>
                         <tbody>
                             <tr v-if="!rocketsTrades.risk || rocketsTrades.risk.length === 0">
-                                <td colspan="10" class="empty-cell">Aucune position en risque.</td>
+                                <td colspan="12" class="empty-cell">Aucune position en risque.</td>
                             </tr>
                             <tr v-for="trade in rocketsTrades.risk" :key="trade.id">
                                 <td class="symbol-col">
@@ -278,8 +280,14 @@
                                     />
                                 </td>
 
+                                <!-- Cours actuel (Placeholder API) -->
+                                <td><!-- TODO(Future): Connecter API --></td>
+
                                 <!-- Nb Actions -->
                                 <td>{{ trade.quantity }}</td>
+
+                                <!-- Montant Position -->
+                                <td>{{ formatCurrency((trade.entry_executed || trade.price || 0) * trade.quantity) }}</td>
                                 
                                 <!-- R1 = Entry + (Entry - Stop) -->
                                 <td>
@@ -314,13 +322,15 @@
                                 <th>Type</th>
                                 <th>Broker</th>
                                 <th>Trailing Stop</th>
+                                <th>Cours actuel</th>
                                 <th>Nb Actions restante</th>
+                                <th>Montant restant</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="!rocketsTrades.neutralized || rocketsTrades.neutralized.length === 0">
-                                <td colspan="6" class="empty-cell">Aucune position neutralisée.</td>
+                                <td colspan="8" class="empty-cell">Aucune position neutralisée.</td>
                             </tr>
                             <tr v-for="trade in rocketsTrades.neutralized" :key="trade.id">
                                 <td class="symbol-col">
@@ -341,8 +351,14 @@
                                     />
                                 </td>
 
+                                <!-- Cours actuel (Placeholder API) -->
+                                <td><!-- TODO(Future): Connecter API --></td>
+
                                 <!-- Reste -->
                                 <td>{{ trade.quantity - (trade.exit_partial_quantity || 0) }}</td>
+
+                                <!-- Montant Restant -->
+                                <td>{{ formatCurrency((trade.entry_executed || trade.price || 0) * (trade.quantity - (trade.exit_partial_quantity || 0))) }}</td>
                                 
                                 <td class="actions-cell">
                                     <button class="action-btn close-btn" @click="$emit('close-rocket', trade)">Trade clôturé</button>

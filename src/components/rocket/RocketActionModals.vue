@@ -28,9 +28,8 @@ import { ref } from 'vue';
 import RocketActivationModal from './RocketActivationModal.vue';
 import RocketNeutralizationModal from './RocketNeutralizationModal.vue';
 import RocketClosureModal from './RocketClosureModal.vue';
-import { useRocketState } from '../../composables/useRocketState.js';
 
-const { activateTrade, neutralizeTrade, closeTrade } = useRocketState();
+const emit = defineEmits(['activate', 'neutralize', 'close']);
 
 const showActivationModal = ref(false);
 const activationTrade = ref(null);
@@ -56,25 +55,38 @@ function openClosure(trade) {
     showClosureModal.value = true;
 }
 
-async function handleActivationConfirm({ date, price }) {
+function handleActivationConfirm({ date, price }) {
     if (activationTrade.value) {
-        await activateTrade(activationTrade.value.trade_id, price, date);
+        emit('activate', { 
+            tradeId: activationTrade.value.trade_id, 
+            price, 
+            date 
+        });
         showActivationModal.value = false;
         activationTrade.value = null;
     }
 }
 
-async function handleNeutralizationConfirm({ date, price, quantity }) {
+function handleNeutralizationConfirm({ date, price, quantity }) {
     if (neutralizationTrade.value) {
-        await neutralizeTrade(neutralizationTrade.value.trade_id, price, date, quantity);
+        emit('neutralize', {
+            tradeId: neutralizationTrade.value.trade_id,
+            price,
+            date,
+            quantity
+        });
         showNeutralizationModal.value = false;
         neutralizationTrade.value = null;
     }
 }
 
-async function handleClosureConfirm({ date, price }) {
+function handleClosureConfirm({ date, price }) {
     if (closureTrade.value) {
-        await closeTrade(closureTrade.value.trade_id, price, date);
+        emit('close', {
+            tradeId: closureTrade.value.trade_id,
+            price,
+            date
+        });
         showClosureModal.value = false;
         closureTrade.value = null;
     }

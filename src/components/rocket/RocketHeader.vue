@@ -24,7 +24,7 @@
       <!-- MM Status Badge injected here -->
       <span class="mm-status-badge" :class="mmStatusColor" v-if="mmStatusText">{{ mmStatusText }}</span>
 
-      <span v-if="calendarEvents.length === 0" class="no-events">Aucune échéance</span>
+      <span v-if="calendarEvents.length === 0 && strategyLabel !== 'Rockets'" class="no-events">Aucune échéance</span>
       <div v-for="(event, index) in calendarEvents" :key="index" class="mini-event-item" :class="{ 'urgent': event.dte <= 3 }">
         <span class="mini-date">{{ event.day }} {{ event.month }}</span>
         <span class="mini-symbol">{{ event.symbol }}</span>

@@ -28,7 +28,12 @@
         @confirm-delete="confirmDeleteTrade"
     />
 
-    <RocketActionModals ref="rocketActionModals" />
+    <RocketActionModals 
+        ref="rocketActionModals" 
+        @activate="({tradeId, price, date}) => activateTrade(tradeId, price, date)"
+        @neutralize="({tradeId, price, date, quantity}) => neutralizeTrade(tradeId, price, date, quantity)"
+        @close="({tradeId, price, date}) => closeTrade(tradeId, price, date)"
+    />
 
     <div class="main-layout">
         <!-- 2. Trade Entry Block (Left Column) -->
@@ -83,7 +88,8 @@ const {
     updateStatus, assignTrade, deleteTrade,
     showDeleteModal, tradeToDelete, confirmDeleteTrade,
     totalExpectedPremium, updateTradeDate, updateTradeQuantity, updateTrailingStop,
-    strategyCashUsed, strategyPL
+    strategyCashUsed, strategyPL,
+    activateTrade, neutralizeTrade, closeTrade
 } = useRocketState();
 
 const rocketActionModals = ref(null);

@@ -675,7 +675,9 @@ export function useRocketState() {
 
             await loadActiveTrades();
             await syncCashUsed();
-        } catch(e) { /* Silent error */ }
+        } catch(e) { 
+            // Handle error
+        }
     }
 
     async function neutralizeTrade(tradeId, exitPartialPrice, exitPartialDate, exitPartialQty) {
