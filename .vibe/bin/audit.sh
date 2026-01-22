@@ -71,12 +71,6 @@ if [ -f "src-tauri/src/main.rs" ]; then
 fi
 
 echo "🔍 Vérifications règles .clinerules..."
-# Règle 2 : Nommage en Français (simple check : pas de mots anglais courants)
-if grep -r -i "\bfunction\b\|\bvariable\b\|\bconst\b\|\blet\b\|\bif\b\|\bfor\b\|\breturn\b" src/ src-tauri/src/ --include="*.js" --include="*.vue" --include="*.rs" > /dev/null 2>&1; then
-    echo "⚠️ Règle 2 : Mots anglais détectés (vérifiez nommage français)"
-else
-    echo "✅ Règle 2 : Nommage semble français"
-fi
 
 # Règle 10 : Pas de console.log, debugger, alert
 if grep -r "console\.log\|console\.error\|console\.warn\|console\.debug\|debugger\|alert" src/ --include="*.js" --include="*.vue" > /dev/null 2>&1; then

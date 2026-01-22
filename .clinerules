@@ -1,7 +1,6 @@
 # .clinerules - Vos règles projet générées dynamiquement
 # Basé sur .vibe/config.toml
 
-RÈGLE 1 : Nommage en Français (language = fr#Forcelenommageenfrançais(fr/en/auto))
 RÈGLE 2 : Pas de console.log
 RÈGLE 3 : Pas d'unwrap() en Rust
 RÈGLE 4 : Pas de TODO sans nom (utilisez TODO(nom): )

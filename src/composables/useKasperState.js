@@ -5,6 +5,7 @@ export function useKasperState() {
     const db = ref(null);
     const account = ref({ capital: 5000 }); // Default fallback
     const dailyEntries = ref([]);
+    const pairsConfig = ref([]);
     const currentMonth = ref(new Date());
 
     // Metrics
@@ -42,12 +43,81 @@ export function useKasperState() {
                 profit_loss REAL DEFAULT 0,
                 risk_used REAL DEFAULT 0,
                 notes TEXT,
+                details TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Migration for details column
+        try { await db.value.execute("ALTER TABLE kasper_daily_journal ADD COLUMN details TEXT"); } catch (e) {}
+
+        // Ensure table exists for Pair Config
+        await db.value.execute(`
+            CREATE TABLE IF NOT EXISTS kasper_pairs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                pip_value REAL DEFAULT 1,
+                sl_pips REAL DEFAULT 10,
+                risk_pct REAL DEFAULT 1,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
         await loadAccount();
         await loadentries();
+        await loadPairs();
+    }
+
+    async function loadPairs() {
+        if (!db.value) return;
+        const rows = await db.value.select("SELECT * FROM kasper_pairs");
+        
+        if (rows.length === 0) {
+            // Seed initial data
+            const seeds = [
+                { symbol: 'BTC', pip_value: 1, sl_pips: 350, risk_pct: 1 },
+                { symbol: 'XAUUSD', pip_value: 10, sl_pips: 50, risk_pct: 1 },
+                { symbol: 'CHFJPY', pip_value: 7.7, sl_pips: 30, risk_pct: 1 },
+                { symbol: 'GBPJPY', pip_value: 9.13, sl_pips: 20, risk_pct: 1 },
+                { symbol: 'EURJPY', pip_value: 9.13, sl_pips: 20, risk_pct: 1 },
+                { symbol: 'USDJPY', pip_value: 9.13, sl_pips: 20, risk_pct: 1 },
+                { symbol: 'EURUSD', pip_value: 10, sl_pips: 15, risk_pct: 1 },
+                { symbol: 'GBPUSD', pip_value: 10, sl_pips: 15, risk_pct: 1 },
+                { symbol: 'USDCAD', pip_value: 10, sl_pips: 15, risk_pct: 1 },
+                { symbol: 'EURGBP', pip_value: 12.5, sl_pips: 15, risk_pct: 1 },
+                { symbol: 'NZDJPY', pip_value: 6.96, sl_pips: 15, risk_pct: 1 },
+                { symbol: 'XAGUSD', pip_value: 50, sl_pips: 15, risk_pct: 1 },
+                { symbol: 'AUDUSD', pip_value: 10, sl_pips: 15, risk_pct: 1 }
+            ];
+
+            for (const s of seeds) {
+                await db.value.execute("INSERT INTO kasper_pairs (symbol, pip_value, sl_pips, risk_pct) VALUES (?, ?, ?, ?)", [s.symbol, s.pip_value, s.sl_pips, s.risk_pct]);
+            }
+            pairsConfig.value = await db.value.select("SELECT * FROM kasper_pairs");
+        } else {
+            pairsConfig.value = rows;
+        }
+    }
+
+    async function updatePair(pair) {
+        if (!db.value) return;
+        await db.value.execute(
+            "UPDATE kasper_pairs SET symbol = ?, pip_value = ?, sl_pips = ?, risk_pct = ? WHERE id = ?",
+            [pair.symbol, pair.pip_value, pair.sl_pips, pair.risk_pct, pair.id]
+        );
+        await loadPairs();
+    }
+
+    async function addPair(symbol) {
+        if (!db.value) return;
+        await db.value.execute("INSERT INTO kasper_pairs (symbol, pip_value, sl_pips, risk_pct) VALUES (?, 10, 20, 1)", [symbol]);
+        await loadPairs();
+    }
+
+    async function deletePair(id) {
+         if (!db.value) return;
+         await db.value.execute("DELETE FROM kasper_pairs WHERE id = ?", [id]);
+         await loadPairs();
     }
 
     async function loadAccount() {
@@ -74,23 +144,24 @@ export function useKasperState() {
         dailyEntries.value = await db.value.select("SELECT * FROM kasper_daily_journal ORDER BY date ASC");
     }
 
-    async function saveDailyEntry(date, profitLoss, riskUsed) {
+    async function saveDailyEntry(date, profitLoss, riskUsed, details) {
         if (!db.value) return;
         
         // Check if exists
         const existing = dailyEntries.value.find(e => e.date === date);
         const oldPL = existing ? existing.profit_loss : 0;
         const diffPL = parseFloat(profitLoss) - oldPL;
+        const detailsStr = details ? JSON.stringify(details) : null;
 
         if (existing) {
             await db.value.execute(
-                "UPDATE kasper_daily_journal SET profit_loss = ?, risk_used = ? WHERE date = ?", 
-                [profitLoss, riskUsed || 0, date]
+                "UPDATE kasper_daily_journal SET profit_loss = ?, risk_used = ?, details = ? WHERE date = ?", 
+                [profitLoss, riskUsed || 0, detailsStr, date]
             );
         } else {
             await db.value.execute(
-                "INSERT INTO kasper_daily_journal (date, profit_loss, risk_used) VALUES (?, ?, ?)",
-                [date, profitLoss, riskUsed || 0]
+                "INSERT INTO kasper_daily_journal (date, profit_loss, risk_used, details) VALUES (?, ?, ?, ?)",
+                [date, profitLoss, riskUsed || 0, detailsStr]
             );
         }
 
@@ -106,9 +177,13 @@ export function useKasperState() {
     return {
         account,
         dailyEntries,
+        pairsConfig,
         metrics,
         init,
         updateCapital,
-        saveDailyEntry
+        saveDailyEntry,
+        updatePair,
+        addPair,
+        deletePair
     };
 }

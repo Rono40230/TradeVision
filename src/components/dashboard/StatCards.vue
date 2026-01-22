@@ -15,7 +15,7 @@ defineProps({
   <div class="header-stats">
     <div class="mini-stat">
       <h3>Profit Total</h3>
-      <p>{{ totalProfit.toFixed(2) }} €</p>
+      <p>{{ totalProfit.toFixed(2) }} $</p>
     </div>
     <div class="mini-stat">
       <h3>Taux de Réussite</h3>
