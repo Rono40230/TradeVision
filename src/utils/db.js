@@ -65,7 +65,6 @@ export async function initDB() {
 
   // Add open_date to legs to track assignment dates separately
   try { await db.execute("ALTER TABLE legs ADD COLUMN open_date TEXT"); } catch(e) {}
-  try { await db.execute("ALTER TABLE legs ADD COLUMN status TEXT DEFAULT 'open'"); } catch(e) {}
 
   await db.execute(`
     CREATE TABLE IF NOT EXISTS legs (

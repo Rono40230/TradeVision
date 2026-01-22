@@ -9,6 +9,7 @@
         :mm-status-color="mmStatusColor"
         :calendar-events="calendarEvents"
         :total-expected-premium="totalExpectedPremium"
+        :total-assigned="totalAssigned"
         @open-settings="showSettings = true"
     />
 
@@ -88,7 +89,7 @@ const {
     updateStatus, assignTrade, deleteTrade,
     showDeleteModal, tradeToDelete, confirmDeleteTrade,
     totalExpectedPremium, updateTradeDate, updateTradeQuantity, updateTrailingStop,
-    strategyCashUsed, strategyPL,
+    strategyCashUsed, strategyPL, totalAssigned,
     activateTrade, neutralizeTrade, closeTrade
 } = useRocketState();
 

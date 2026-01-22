@@ -468,6 +468,14 @@ export function useRocketState() {
         return trades.reduce((sum, t) => sum + t.profit_loss, 0);
     });
 
+    const totalAssigned = computed(() => {
+        if (strategyType.value !== 'wheel') return 0;
+        return wheelStocks.value.reduce((sum, t) => {
+             const price = t.entry_executed || t.entry_price || t.price || 0;
+             return sum + (price * 100 * t.quantity);
+        }, 0);
+    });
+
     // Calendar
     const calendarEvents = computed(() => {
         // Filter by Strategy Type first
@@ -534,18 +542,18 @@ export function useRocketState() {
 
     const mmStatusText = computed(() => {
         if (strategyType.value === 'wheel') {
-            if (!wheelStats.value.isRespecting) return 'CAPITAL DÉPASSÉ';
-            if (wheelStats.value.remaining < 1000) return 'CAPITAL ATTEINT';
+            if (!wheelStats.value.isRespecting) return 'MM DEPASSE';
+            if (wheelStats.value.remaining < 1000) return 'MM ATTEINT';
             return 'MM RESPECTÉ';
         }
         if (strategyType.value === 'pcs') {
-            if (!pcsStats.value.isRespecting) return 'LIMITE DÉPASSÉE';
-            if (pcsStats.value.count >= pcsStats.value.limit) return 'LIMITE ATTEINTE';
+            if (!pcsStats.value.isRespecting) return 'MM DEPASSE';
+            if (pcsStats.value.count >= pcsStats.value.limit) return 'MM ATTEINT';
             return `MM RESPECTÉ (${pcsStats.value.count}/10)`;
         }
         if (strategyType.value === 'rockets') {
-            if (!rocketsStats.value.isRespecting) return 'LIMITE DÉPASSÉE';
-            if (rocketsStats.value.count >= rocketsStats.value.limit) return 'LIMITE ATTEINTE';
+            if (!rocketsStats.value.isRespecting) return 'MM DEPASSE';
+            if (rocketsStats.value.count >= rocketsStats.value.limit) return 'MM ATTEINT';
             return `MM RESPECTÉ (${rocketsStats.value.count}/5)`;
         }
         return '';
@@ -553,7 +561,7 @@ export function useRocketState() {
 
     const mmStatusColor = computed(() => {
         let text = mmStatusText.value;
-        if (text.includes('DÉPASSÉ')) return 'red';
+        if (text.includes('DEPASSE')) return 'red';
         if (text.includes('ATTEINT')) return 'blue';
         return 'green';
     });
@@ -830,6 +838,6 @@ export function useRocketState() {
         displayedCapital, activeTradesWheel, wheelOptions, wheelStocks, activeTradesPcs, activeTradesRockets, rocketsTrades,
         currentActiveTrades, currentAssignedTrades, strategyLabel, calendarEvents,
         wheelStats, pcsStats, rocketsStats, mmStatusText, mmStatusColor, totalExpectedPremium,
-        strategyCashUsed, strategyPL
+        strategyCashUsed, strategyPL, totalAssigned
     };
 }

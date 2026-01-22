@@ -9,6 +9,10 @@
         <span class="label">Cash Utilisé</span>
         <span class="value">{{ formatCurrency(account.cash_used) }}</span>
       </div>
+      <div class="mm-item" v-if="strategyLabel === 'Wheel'">
+        <span class="label">Total des assignations</span>
+        <span class="value">{{ formatCurrency(totalAssigned) }}</span>
+      </div>
       <div class="mm-item">
         <span class="label">Cash Dispo</span>
         <span class="value">{{ formatCurrency(displayedCapital - account.cash_used) }}</span>
@@ -45,7 +49,8 @@ const props = defineProps({
   mmStatusText: { type: String, default: '' },
   mmStatusColor: { type: String, default: '' },
   calendarEvents: { type: Array, default: () => [] },
-  totalExpectedPremium: { type: Number, default: 0 }
+  totalExpectedPremium: { type: Number, default: 0 },
+  totalAssigned: { type: Number, default: 0 }
 });
 
 defineEmits(['open-settings']);
