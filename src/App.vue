@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from "vue";
 import { initDB } from "./utils/db.js";
 import DashboardView from "./views/DashboardView.vue";
 import RocketAcademy from "./components/RocketAcademy.vue";
+import KasperAcademy from "./components/KasperAcademy.vue";
 import AppTitlebar from "./components/AppTitlebar.vue";
 
 const db = ref(null);
@@ -25,9 +26,10 @@ onMounted(async () => {
 
         <RocketAcademy v-else-if="currentView === 'rocket-academy'" />
 
+        <KasperAcademy v-else-if="currentView === 'kasper-academy'" />
+
         <div v-else class="page-placeholder">
-            <h2>Kasper Academy</h2>
-            <p>Cette page est en cours de construction.</p>
+            <h2>Page Introuvable</h2>
         </div>
       </main>
     </div>
