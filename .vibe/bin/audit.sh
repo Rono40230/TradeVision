@@ -73,7 +73,7 @@ fi
 echo "🔍 Vérifications règles .clinerules..."
 
 # Règle 10 : Pas de console.log, debugger, alert
-if grep -r "console\.log\|console\.error\|console\.warn\|console\.debug\|debugger\|alert" src/ --include="*.js" --include="*.vue" > /dev/null 2>&1; then
+if grep -r "console\.log\|console\.error\|console\.warn\|console\.debug\|debugger\|alert(" src/ --include="*.js" --include="*.vue" > /dev/null 2>&1; then
     echo "❌ Règle 10 : console/debugger/alert trouvé"
     ERRORS=$((ERRORS + 1))
 else

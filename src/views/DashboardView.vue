@@ -1,213 +1,211 @@
+<template>
+  <div class="dashboard-container">
+    
+    <!-- HEADER (Zone A: Vue PDG) -->
+    <DashboardHeader
+        :currentDate="currentDate"
+        :totalNetWorth="totalNetWorth"
+        :kasperCapital="kasperCapital"
+        :rocketBalanceWheel="rocketBalanceWheel"
+        :rocketBalancePcs="rocketBalancePcs"
+        :rocketBalanceGrowth="rocketBalanceGrowth"
+        @openMmSettings="rocket.showSettings.value = true"
+    />
+
+    <!-- BENTO GRID CONTENT -->
+    <div class="bento-grid">
+        
+        <!-- ZONE B: ROCKET ACADEMY SUMMARY -->
+        <RocketSummary 
+            :activeTradesCount="rocketActiveTradesCount"
+            :breakdown="breakdown"
+            :activeTrades="rocketActiveTrades"
+        />
+
+        <!-- ZONE C: KASPER ACADEMY SUMMARY -->
+        <KasperSummary
+            :result="kasperResult"
+            :metrics="kasperMetrics"
+            :chartData="kasperChartData"
+        />
+
+        <!-- ZONE D: ACTIONS & ALERTS -->
+        <DashboardActions 
+            @navigate="(target) => emit('navigate', target)"
+        />
+
+    </div>
+    
+    <RocketModals
+        v-model:showSettings="rocket.showSettings.value"
+        :mmConfig="rocket.mmConfig.value"
+        @update-capital="rocket.updateTotalCapital"
+        @save-mm-settings="rocket.saveMMSettings"
+    />
+  </div>
+</template>
+
 <script setup>
-import { ref, watch, onMounted } from 'vue';
-import StatCards from "../components/dashboard/StatCards.vue";
-import ActiveTradesBar from "../components/dashboard/ActiveTradesBar.vue";
-import RocketModals from "../components/rocket/RocketModals.vue";
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRocketState } from '../composables/useRocketState.js';
+import { useKasperState } from '../composables/useKasperState.js';
+import RocketModals from "../components/rocket/RocketModals.vue";
+
+// Sub-components
+import DashboardHeader from '../components/dashboard/DashboardHeader.vue';
+import RocketSummary from '../components/dashboard/RocketSummary.vue';
+import KasperSummary from '../components/dashboard/KasperSummary.vue';
+import DashboardActions from '../components/dashboard/DashboardActions.vue';
 
 const props = defineProps({
-  db: {
-    type: Object,
-    default: null
-  }
+  db: { type: Object, default: null }
 });
 
-const { 
-    showSettings, mmConfig, 
-    init, saveMMSettings, updateTotalCapital,
-    // Unused but destructured to avoid errors if needed
-    // showAssignModal, ...
-} = useRocketState();
+const emit = defineEmits(['navigate']);
 
-const closedTradesCount = ref(0);
+// -- COMPOSABLES --
+const rocket = useRocketState();
+const kasper = useKasperState();
+
+// -- STATE LOCAL --
+const currentDate = new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 const openTradesCount = ref(0);
-const totalProfit = ref(0);
-const winRate = ref(0);
-const selectedAsset = ref('all');
 const breakdown = ref({
-  wheel_put: 0,
-  wheel_cc: 0,
-  wheel_hedge: 0,
-  wheel_assigned: 0,
-  pcs: 0,
-  iron_condor: 0,
-  rockets_stock: 0,
-  rockets_crypto: 0
+  wheel_put: 0, wheel_cc: 0, wheel_hedge: 0, wheel_assigned: 0,
+  pcs: 0, iron_condor: 0, rockets_stock: 0, rockets_crypto: 0
 });
 
-// Watch for DB readiness and reload stats
+// -- INIT --
+onMounted(async () => {
+    // Initialize both states
+    await rocket.init();
+    await kasper.init();
+});
+
+// Watch DB prop for legacy reasons if db is passed from parent
 watch(() => props.db, async (newVal) => {
     if (newVal) {
-        await init(); // Init Rocket State (for MM Config)
-        loadStats();
+        await rocket.init();
+        await kasper.init();
+        loadRocketStats();
     }
-}, { immediate: true });
+});
 
-watch(selectedAsset, loadStats);
+// -- COMPUTED METRICS --
 
-async function loadStats() {
-  if (!props.db) return;
+// 1. Capitals
+const rocketCapital = computed(() => rocket.account.value?.capital || 0);
+const rocketBalanceWheel = computed(() => rocket.account.value?.alloc_wheel || 0);
+const rocketBalancePcs = computed(() => rocket.account.value?.alloc_rocket || 0);
+const rocketBalanceGrowth = computed(() => rocket.account.value?.alloc_growth || 0);
 
-  const params = selectedAsset.value !== 'all' ? [selectedAsset.value] : [];
-  
-  // 1. Closed Trades (Trades cloturés)
-  let closedQuery = "SELECT COUNT(*) as count FROM trades WHERE status = 'closed'";
-  if (selectedAsset.value !== 'all') closedQuery += " AND asset_type = ?";
-  const closedResult = await props.db.select(closedQuery, params);
-  closedTradesCount.value = closedResult[0].count;
+const kasperCapital = computed(() => kasper.account.value?.capital || 0);
+const totalNetWorth = computed(() => rocketCapital.value + kasperCapital.value);
 
-  // 2. Open Trades Breakdown
-  let openQuery = `
+// 2. Rocket Specifics
+const rocketActiveTrades = computed(() => rocket.allActiveTrades.value || []);
+const rocketActiveTradesCount = computed(() => rocketActiveTrades.value.length);
+
+// 3. Kasper Specificsmetrics
+const kasperMetrics = computed(() => kasper.metrics.value || { result: 0, averageRisk: 0, winrate: 0 });
+const kasperResult = computed(() => kasperMetrics.value.result);
+
+const kasperChartData = computed(() => {
+    const entries = [...(kasper.dailyEntries.value || [])].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const base = kasper.account.value?.capital || 0;
+    
+    if (entries.length === 0) {
+         return { labels: ['Départ'], values: [base] };
+    }
+
+    const labels = [];
+    const values = [];
+    
+    let cumPL = 0;
+    entries.forEach(e => {
+        cumPL += e.profit_loss;
+        labels.push(new Date(e.date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }));
+        values.push(base + cumPL);
+    });
+
+    return { labels, values };
+});
+
+async function loadRocketStats() {
+    if (!props.db) return;
+    
+     breakdown.value = {
+        wheel_put: 0, wheel_cc: 0, wheel_hedge: 0, wheel_assigned: 0,
+        pcs: 0, iron_condor: 0, rockets_stock: 0, rockets_crypto: 0
+    };
+
+    if (rocket.allActiveTrades.value) {
+        openTradesCount.value = rocket.allActiveTrades.value.length;
+    }
+}
+
+watch(() => props.db, loadLegacyRocketStats, { immediate: true });
+
+async function loadLegacyRocketStats() {
+    if(!props.db) return;
+    
+    // Re-use exact query from original file 
+    const params = []; 
+    let openQuery = `
     SELECT t.id, t.strategy, t.asset_type, l.type, l.side, l.status as leg_status
     FROM trades t 
     JOIN legs l ON t.id = l.trade_id 
     WHERE t.status != 'closed' AND l.status IN ('open', 'pending', 'neutralized')
-  `;
-  
-  if (selectedAsset.value !== 'all') openQuery += " AND t.asset_type = ?";
-  
-  const openResult = await props.db.select(openQuery, params);
-  
-  // Group by Trade ID
-  const tradesMap = new Map();
-  openResult.forEach(row => {
-      if (!tradesMap.has(row.id)) {
-          tradesMap.set(row.id, {
-              strategy: row.strategy,
-              asset_type: row.asset_type,
-              legs: []
-          });
-      }
-      tradesMap.get(row.id).legs.push(row);
-  });
-  
-  openTradesCount.value = tradesMap.size;
+    `;
+    const openResult = await props.db.select(openQuery, params);
+    
+    const tradesMap = new Map();
+    openResult.forEach(row => {
+        if (!tradesMap.has(row.id)) {
+            tradesMap.set(row.id, {
+                strategy: row.strategy,
+                asset_type: row.asset_type,
+                legs: []
+            });
+        }
+        tradesMap.get(row.id).legs.push(row);
+    });
 
-  // Reset breakdown
-  breakdown.value = {
-      wheel_put: 0, wheel_cc: 0, wheel_hedge: 0, wheel_assigned: 0,
-      pcs: 0, iron_condor: 0, rockets_stock: 0, rockets_crypto: 0
-  };
-
-  for (const trade of tradesMap.values()) {
-      if (trade.strategy === 'wheel') {
-          const hasShortCall = trade.legs.some(l => l.type === 'call' && l.side === 'short');
-          const hasStock = trade.legs.some(l => l.type === 'stock');
-          const hasShortPut = trade.legs.some(l => l.type === 'put' && l.side === 'short');
-          const hasLongPut = trade.legs.some(l => l.type === 'put' && l.side === 'long');
-
-          if (hasShortCall) breakdown.value.wheel_cc++;
-          else if (hasStock) breakdown.value.wheel_assigned++;
-          else if (hasShortPut) breakdown.value.wheel_put++;
-          else if (hasLongPut) breakdown.value.wheel_hedge++;
-      }
-      else if (trade.strategy === 'pcs') {
-          const hasCalls = trade.legs.some(l => l.type === 'call');
-          const hasPuts = trade.legs.some(l => l.type === 'put');
-          
-          if (hasCalls && hasPuts) breakdown.value.iron_condor++;
-          else breakdown.value.pcs++;
-      }
-      else if (trade.strategy === 'iron_condor') {
-          breakdown.value.iron_condor++;
-      }
-      else if (trade.strategy === 'rockets') {
-          if (trade.asset_type === 'crypto') breakdown.value.rockets_crypto++;
-          else breakdown.value.rockets_stock++;
-      }
-  }
-
-  // 3. Profit (closed)
-  let profitQuery = "SELECT SUM(profit_loss) as profit FROM trades WHERE status = 'closed'";
-  if (selectedAsset.value !== 'all') profitQuery += " AND asset_type = ?";
-  const profitResult = await props.db.select(profitQuery, params);
-  totalProfit.value = profitResult[0].profit || 0;
-
-  // 4. Win Rate
-  let winsQuery = "SELECT COUNT(*) as wins FROM trades WHERE status = 'closed' AND profit_loss > 0";
-  if (selectedAsset.value !== 'all') {
-    winsQuery += " AND asset_type = ?";
-  }
-  const winsResult = await props.db.select(winsQuery, params);
-  
-  if (closedTradesCount.value > 0) {
-    winRate.value = ((winsResult[0].wins / closedTradesCount.value) * 100).toFixed(2);
-  } else {
-    winRate.value = 0;
-  }
+    for (const trade of tradesMap.values()) {
+        if (trade.strategy === 'wheel') {
+            const hasShortCall = trade.legs.some(l => l.type === 'call' && l.side === 'short');
+            const hasStock = trade.legs.some(l => l.type === 'stock');
+            if (hasShortCall) breakdown.value.wheel_cc++;
+            else if (hasStock) breakdown.value.wheel_assigned++;
+            else breakdown.value.wheel_put++; 
+        } else if (trade.strategy === 'pcs') breakdown.value.pcs++;
+        else if (trade.strategy === 'iron_condor') breakdown.value.iron_condor++;
+        else if (trade.strategy === 'rocket') {
+             if (trade.asset_type === 'crypto') breakdown.value.rockets_crypto++;
+             else breakdown.value.rockets_stock++;
+        }
+    }
 }
 </script>
 
-<template>
-  <div class="dashboard-view">
-    <header>
-      <StatCards
-        :total-profit="totalProfit"
-        :win-rate="winRate"
-      />
-      <div id="header-actions"></div>
-    </header>
-
-    <div class="dashboard-wrapper">
-      <div class="dashboard">
-        <ActiveTradesBar
-          :open-trades-count="openTradesCount"
-          :breakdown="breakdown"
-          @open-settings="showSettings = true"
-        />
-      </div>
-
-       <RocketModals
-        v-model:showSettings="showSettings"
-        :mmConfig="mmConfig"
-        @update-capital="updateTotalCapital"
-        @save-mm-settings="saveMMSettings"
-    />
-    </div>
-  </div>
-</template>
-
 <style scoped>
-header {
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-#header-actions {
-    display: flex;
-    gap: 1rem;
-}
-
-h1 {
-  font-size: 1.8rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-color);
-  text-align: left;
-}
-
-.dashboard-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  overflow: hidden;
-  height: calc(100vh - 80px); /* Adjust based on header height approximation if needed, or flex handles it */
-}
-/* Re-applying flex logic to parent container instead of calc might be better */
-.dashboard-view {
+.dashboard-container {
+    padding: 1.5rem;
+    height: 100%;
+    overflow-y: auto;
+    background-color: var(--bg-color);
+    color: var(--text-color);
     display: flex;
     flex-direction: column;
-    height: 100%;
-    overflow: hidden;
+    gap: 2rem;
 }
 
-.dashboard {
-  padding: 2rem;
-  flex: 1;
-  overflow-y: auto;
-  background-color: var(--bg-color);
+/* BENTO GRID LAYOUT */
+.bento-grid {
+    display: grid;
+    grid-template-columns: 2fr 2fr 1.5fr; /* 3 Columns */
+    gap: 1.5rem;
+    flex: 1;
 }
 </style>
+

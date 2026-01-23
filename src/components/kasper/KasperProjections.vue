@@ -45,7 +45,8 @@ defineProps({
 function formatCurrencySimple(val) {
     const v = Number(val);
     if (isNaN(v)) return '0 $';
-    return v.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' $';
+    const rounded = Math.round(v * 2) / 2;
+    return rounded.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' $';
 }
 </script>
 

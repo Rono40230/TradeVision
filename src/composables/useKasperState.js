@@ -14,6 +14,8 @@ export function useKasperState() {
         let totalMinus = 0;
         let totalRisk = 0;
         let count = 0;
+        let winningTrades = 0;
+        let totalTrades = 0;
 
         dailyEntries.value.forEach(e => {
             if (e.profit_loss > 0) totalPlus += e.profit_loss;
@@ -22,13 +24,29 @@ export function useKasperState() {
                 totalRisk += e.risk_used;
                 count++;
             }
+            
+            if (e.details) {
+                try {
+                    const trades = JSON.parse(e.details);
+                    if (Array.isArray(trades)) {
+                        trades.forEach(t => {
+                            // Count trades that have a result
+                            if (t.result !== null && t.result !== undefined && t.result !== '') {
+                                totalTrades++;
+                                if (parseFloat(t.result) > 0) winningTrades++;
+                            }
+                        });
+                    }
+                } catch (err) {}
+            }
         });
 
         return {
             totalPlus,
             totalMinus,
             result: totalPlus + totalMinus,
-            averageRisk: count > 0 ? totalRisk / count : 0
+            averageRisk: count > 0 ? totalRisk / count : 0,
+            winrate: totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0
         };
     });
 
@@ -165,11 +183,8 @@ export function useKasperState() {
             );
         }
 
-        // Update Capital automatically
-        // New Capital = Old Capital + Diff (because Current Capital includes Old P/L)
-        // Actually, simpler: Current Capital = Current Capital + (New P/L - Old P/L)
-        const newCapital = account.value.capital + diffPL;
-        await updateCapital(newCapital);
+        // Capital is FIXED (Invested), do not auto-update it with P/L.
+        // P/L are calculated dynamically via metrics.
 
         await loadentries();
     }

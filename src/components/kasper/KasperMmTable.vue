@@ -54,7 +54,8 @@ import { ref } from 'vue';
 
 const props = defineProps({
     pairsConfig: Array,
-    account: Object
+    account: Object,
+    currentCapital: Number
 });
 
 const emit = defineEmits(['updatePair', 'deletePair', 'addPair']);
@@ -73,14 +74,14 @@ function addNewPair() {
 }
 
 function calculateInvested(pair) {
-    if (!props.account || !pair) return '0 $';
-    const amount = props.account.capital * (pair.risk_pct / 100);
+    if (!props.currentCapital || !pair) return '0 $';
+    const amount = props.currentCapital * (pair.risk_pct / 100);
     return Math.ceil(amount) + ' $'; 
 }
 
 function calculateLot(pair) {
-    if (!props.account || !pair || pair.sl_pips === 0 || pair.pip_value === 0) return '0.00';
-    const riskAmount = props.account.capital * (pair.risk_pct / 100);
+    if (!props.currentCapital || !pair || pair.sl_pips === 0 || pair.pip_value === 0) return '0.00';
+    const riskAmount = props.currentCapital * (pair.risk_pct / 100);
     const lot = riskAmount / (pair.sl_pips * pair.pip_value);
     return lot.toFixed(2);
 }

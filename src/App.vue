@@ -22,7 +22,11 @@ onMounted(async () => {
     
     <div class="app-container">
       <main class="main-content">
-        <DashboardView v-if="currentView === 'dashboard'" :db="db" />
+        <DashboardView 
+            v-if="currentView === 'dashboard'" 
+            :db="db" 
+            @navigate="(view) => currentView = view"
+        />
 
         <RocketAcademy v-else-if="currentView === 'rocket-academy'" />
 

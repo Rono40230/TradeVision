@@ -1,23 +1,16 @@
 <template>
   <div class="kasper-academy">
-    <div class="kasper-top-section">
-        <KasperMetrics 
-            class="metrics-panel"
-            :account="account" 
-            :metrics="metrics" 
-            @openCapitalModal="showCapModal = true"
-        />
-        <KasperCapitalChart 
-            class="chart-panel"
-            :account="account"
-            :dailyEntries="dailyEntries"
-        />
-    </div>
+    <KasperMetrics 
+        :account="account" 
+        :metrics="metrics" 
+        @openCapitalModal="showCapModal = true"
+    />
 
     <div class="kasper-main-row">
         <KasperMmTable 
             :pairsConfig="pairsConfig" 
             :account="account"
+            :currentCapital="realTimeCapital"
             @updatePair="updatePairConfig"
             @deletePair="confirmDeletePair"
             @addPair="addNewPair"
@@ -28,7 +21,8 @@
         </KasperMmTable>
 
         <KasperCalendar 
-            :dailyEntries="dailyEntries"
+            :dailyEntries="enrichedDailyEntries"
+            :pairsConfig="pairsConfig"
             @openDayModal="onOpenDayModal"
         />
     </div>
@@ -39,6 +33,7 @@
         :date="selectedDayDate"
         :entry="selectedDayEntry"
         :pairsConfig="pairsConfig"
+        :currentCapital="realTimeCapital"
         @close="showDayModal = false"
         @save="onSaveDay"
     />
@@ -63,7 +58,6 @@
 import { ref, computed, onMounted } from 'vue';
 import { useKasperState } from '../composables/useKasperState.js';
 import KasperMetrics from './kasper/KasperMetrics.vue';
-import KasperCapitalChart from './kasper/KasperCapitalChart.vue';
 import KasperMmTable from './kasper/KasperMmTable.vue';
 import KasperProjections from './kasper/KasperProjections.vue';
 import KasperCalendar from './kasper/KasperCalendar.vue';
@@ -87,11 +81,43 @@ onMounted(() => {
     init();
 });
 
+const realTimeCapital = computed(() => {
+    return (account.value ? account.value.capital : 0) + (metrics.value ? metrics.value.result : 0);
+});
+
 const baseRiskAmount = computed(() => {
-    if (pairsConfig.value.length > 0 && account.value) {
-        return (account.value.capital || 0) * (pairsConfig.value[0].risk_pct / 100);
+    // Uses realTimeCapital for calculation
+    const cap = realTimeCapital.value;
+    if (pairsConfig.value.length > 0) {
+        return cap * (pairsConfig.value[0].risk_pct / 100);
     }
-    return (account.value ? account.value.capital : 0) * 0.01;
+    return cap * 0.01;
+});
+
+const enrichedDailyEntries = computed(() => {
+    if (!dailyEntries.value || !account.value) return [];
+    
+    // Calculate total PL so we can find the "Start Capital" relative to current status
+    // Correction: account.capital is now the FIXED Invested Capital. 
+    // So StartBase is simply that capital.
+    const startBase = (account.value.capital || 0);
+
+    let currentAccumulated = 0;
+            
+    // Use map to create new objects with start/end capital info
+    return dailyEntries.value.map(e => {
+        const startCap = startBase + currentAccumulated;
+        const pl = e.profit_loss || 0;
+        const endCap = startCap + pl;
+        
+        currentAccumulated += pl;
+        
+        return {
+            ...e, // keep original fields including details
+            startCapital: startCap,
+            endCapital: endCap
+        };
+    });
 });
 
 // Handlers
@@ -142,21 +168,6 @@ async function onSaveCapital(amount) {
     padding: 1rem;
     gap: 1.5rem;
     background-color: var(--bg-color);
-}
-
-.kasper-top-section {
-    display: flex;
-    gap: 1.5rem;
-    height: 160px; /* Fixed height for top section to keep chart stable */
-    min-height: 160px;
-}
-
-.metrics-panel {
-    flex: 2; /* Takes 2/3 of space */
-}
-
-.chart-panel {
-    flex: 1; /* Takes 1/3 of space */
 }
 
 .kasper-main-row {

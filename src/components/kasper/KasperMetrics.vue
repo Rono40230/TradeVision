@@ -5,21 +5,21 @@
             <span class="value action-value" @click="$emit('openCapitalModal')">{{ formatCurrency(account?.capital) }}</span>
              <button class="icon-btn edit-cap-btn" @click="$emit('openCapitalModal')" title="Saisir capital de départ">✎</button>
         </div>
-        <div class="metric-group positive">
-            <span class="label">Plus-Values</span>
-            <span class="value">+{{ formatCurrency(metrics?.totalPlus) }}</span>
-        </div>
-        <div class="metric-group negative">
-            <span class="label">Moins-Values</span>
-            <span class="value">{{ formatCurrency(metrics?.totalMinus) }}</span>
-        </div>
         <div class="metric-group" :class="(metrics?.result || 0) >= 0 ? 'positive' : 'negative'">
             <span class="label">Résultat Net</span>
             <span class="value">{{ formatCurrency(metrics?.result) }}</span>
         </div>
+        <div class="metric-group text-primary">
+            <span class="label">Capital Actuel</span>
+            <span class="value">{{ formatCurrency(currentCapital) }}</span>
+        </div>
         <div class="metric-group">
             <span class="label">Risque Moyen</span>
-            <span class="value">{{ formatCurrency(metrics?.averageRisk) }}</span>
+            <span class="value">{{ formatRiskPct(metrics?.averageRisk) }}</span>
+        </div>
+        <div class="metric-group">
+            <span class="label">Winrate</span>
+            <span class="value">{{ formatWinrate(metrics?.winrate) }}</span>
         </div>
     </div>
 </template>
@@ -34,8 +34,28 @@ const props = defineProps({
 
 defineEmits(['openCapitalModal']);
 
+const currentCapital = computed(() => {
+    return (props.account?.capital || 0) + (props.metrics?.result || 0);
+});
+
 function formatCurrency(val) {
     return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val || 0) + ' $';
+}
+
+function formatRiskPct(val) {
+    // val is dollars average risk
+    const cap = props.account?.capital || 1;
+    // Pct
+    const pct = (val / cap) * 100;
+    // Round to 0.5
+    const rounded = Math.round(pct * 2) / 2;
+    // Remove .0 if integer
+    return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + ' %';
+}
+
+function formatWinrate(val) {
+    if (!val) return '0%';
+    return val.toFixed(0) + '%';
 }
 </script>
 
@@ -86,4 +106,6 @@ function formatCurrency(val) {
     font-size: 1rem;
 }
 .edit-cap-btn:hover { color: var(--accent-color); }
+
+.text-primary .value { color: #2196F3; }
 </style>
