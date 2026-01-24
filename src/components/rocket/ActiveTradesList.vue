@@ -242,8 +242,10 @@
                                 <th>Ouverture</th>
                                 <th>Trailing Stop</th>
                                 <th>Cours actuel</th>
+                                <th>Tendance</th>
                                 <th>Nb Actions</th>
                                 <th>Montant Position</th>
+                                <th>P/L</th>
                                 <th>R1</th>
                                 <th>Vente R1</th>
                                 <th>Actions</th>
@@ -251,7 +253,7 @@
                         </thead>
                         <tbody>
                             <tr v-if="!rocketsTrades.risk || rocketsTrades.risk.length === 0">
-                                <td colspan="12" class="empty-cell">Aucune position en risque.</td>
+                                <td colspan="14" class="empty-cell">Aucune position en risque.</td>
                             </tr>
                             <tr v-for="trade in rocketsTrades.risk" :key="trade.id">
                                 <td class="symbol-col">
@@ -280,8 +282,15 @@
                                     />
                                 </td>
 
-                                <!-- Cours actuel (Placeholder API) -->
-                                <td><!-- TODO(Future): Connecter API --></td>
+                                <!-- Cours actuel -->
+                                <td :class="getTrendClass(trade.symbol)">
+                                     {{ getDisplayPrice(trade.symbol) }}
+                                </td>
+
+                                <!-- Tendance -->
+                                <td :class="getTrendClass(trade.symbol)">
+                                     {{ getDisplayTrend(trade.symbol) }}
+                                </td>
 
                                 <!-- Nb Actions -->
                                 <td>{{ trade.quantity }}</td>
@@ -289,6 +298,11 @@
                                 <!-- Montant Position -->
                                 <td>{{ formatCurrency((trade.entry_executed || trade.price || 0) * trade.quantity) }}</td>
                                 
+                                <!-- P/L -->
+                                <td :class="((livePrices[trade.symbol]?.price || 0) - (trade.entry_executed || trade.price || 0)) * trade.quantity >= 0 ? 'positive-text' : 'negative-text'">
+                                    {{ livePrices[trade.symbol]?.price ? formatCurrency(((livePrices[trade.symbol]?.price) - (trade.entry_executed || trade.price || 0)) * trade.quantity) : '-' }}
+                                </td>
+
                                 <!-- R1 = Entry + (Entry - Stop) -->
                                 <td>
                                     {{ formatPrice(
@@ -323,14 +337,16 @@
                                 <th>Broker</th>
                                 <th>Trailing Stop</th>
                                 <th>Cours actuel</th>
+                                <th>Tendance</th>
                                 <th>Nb Actions restante</th>
                                 <th>Montant restant</th>
+                                <th>P/L</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-if="!rocketsTrades.neutralized || rocketsTrades.neutralized.length === 0">
-                                <td colspan="8" class="empty-cell">Aucune position neutralisée.</td>
+                                <td colspan="10" class="empty-cell">Aucune position neutralisée.</td>
                             </tr>
                             <tr v-for="trade in rocketsTrades.neutralized" :key="trade.id">
                                 <td class="symbol-col">
@@ -351,8 +367,15 @@
                                     />
                                 </td>
 
-                                <!-- Cours actuel (Placeholder API) -->
-                                <td><!-- TODO(Future): Connecter API --></td>
+                                <!-- Cours actuel -->
+                                <td :class="getTrendClass(trade.symbol)">
+                                     {{ getDisplayPrice(trade.symbol) }}
+                                </td>
+
+                                <!-- Tendance -->
+                                <td :class="getTrendClass(trade.symbol)">
+                                     {{ getDisplayTrend(trade.symbol) }}
+                                </td>
 
                                 <!-- Reste -->
                                 <td>{{ trade.quantity - (trade.exit_partial_quantity || 0) }}</td>
@@ -360,6 +383,11 @@
                                 <!-- Montant Restant -->
                                 <td>{{ formatCurrency((trade.entry_executed || trade.price || 0) * (trade.quantity - (trade.exit_partial_quantity || 0))) }}</td>
                                 
+                                <!-- P/L -->
+                                <td :class="((livePrices[trade.symbol]?.price || 0) - (trade.entry_executed || trade.price || 0)) * (trade.quantity - (trade.exit_partial_quantity || 0)) >= 0 ? 'positive-text' : 'negative-text'">
+                                    {{ livePrices[trade.symbol]?.price ? formatCurrency(((livePrices[trade.symbol]?.price) - (trade.entry_executed || trade.price || 0)) * (trade.quantity - (trade.exit_partial_quantity || 0))) : '-' }}
+                                </td>
+
                                 <td class="actions-cell">
                                     <button class="action-btn close-btn" @click="$emit('close-rocket', trade)">Trade clôturé</button>
                                 </td>
@@ -445,13 +473,14 @@
                         <th>Nb Actions</th>
                         <th>Coût Total</th> 
                         <th>Prix Actuel</th>
+                        <th>Tendance</th>
                         <th>P&L</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-if="assignedTrades.length === 0">
-                        <td colspan="8" class="empty-cell">Aucune assignation en cours.</td>
+                        <td colspan="9" class="empty-cell">Aucune assignation en cours.</td>
                     </tr>
                     <tr v-for="trade in assignedTrades" :key="trade.id">
                         <td>{{ trade.symbol }}</td>
@@ -466,9 +495,19 @@
                         <td>{{ formatCurrency(trade.entry_price || trade.strike) }}</td>
                         <td>{{ trade.quantity * 100 }}</td>
                         <td>{{ formatCurrency((trade.entry_price || trade.strike) * trade.quantity * 100) }}</td>
-                        <td>{{ trade.current_price ? formatCurrency(trade.current_price) : '--' }}</td>
-                        <td :class="{ 'positive': trade.current_price && (trade.current_price - (trade.entry_price || trade.strike)) >= 0, 'negative': trade.current_price && (trade.current_price - (trade.entry_price || trade.strike)) < 0 }">
-                            {{ trade.current_price ? formatCurrency((trade.current_price * trade.quantity * 100) - ((trade.entry_price || trade.strike) * trade.quantity * 100)) : '--' }}
+                        
+                        <!-- Prix Actuel (uses livePrices[sym].price or trade.current_price) -->
+                        <td :class="getTrendClass(trade.symbol)">
+                             {{ getDisplayPrice(trade.symbol, trade.current_price) }}
+                        </td>
+
+                        <!-- Tendance -->
+                        <td :class="getTrendClass(trade.symbol)">
+                            {{ getDisplayTrend(trade.symbol) }}
+                        </td>
+
+                        <td :class="{ 'positive': (livePrices[trade.symbol]?.price || trade.current_price) && ((livePrices[trade.symbol]?.price || trade.current_price) - (trade.entry_price || trade.strike)) >= 0, 'negative': (livePrices[trade.symbol]?.price || trade.current_price) && ((livePrices[trade.symbol]?.price || trade.current_price) - (trade.entry_price || trade.strike)) < 0 }">
+                            {{ (livePrices[trade.symbol]?.price || trade.current_price) ? formatCurrency(((livePrices[trade.symbol]?.price || trade.current_price) * trade.quantity * 100) - ((trade.entry_price || trade.strike) * trade.quantity * 100)) : '--' }}
                         </td>
                         <td class="actions-cell">
                             <button class="action-btn roll-btn" @click="openRollModal(trade)">Rouler</button>
@@ -511,7 +550,8 @@
 </style>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue';
+import { fetchPrices } from '../../composables/useMarketData.js';
 import { formatCurrency, formatDate } from '../../utils/rocketUtils.js';
 import CoveredCallModal from './CoveredCallModal.vue';
 
@@ -523,6 +563,59 @@ const props = defineProps({
     assignedTrades: { type: Array, default: () => [] },
     account: { type: Object, default: () => ({ id: null }) }
 });
+
+const livePrices = reactive({});
+const isUpdating = ref(false);
+let refreshInterval = null;
+
+onMounted(() => {
+    refreshPrices();
+    // Refresh every 15 seconds
+    refreshInterval = setInterval(refreshPrices, 15000);
+});
+
+onUnmounted(() => {
+    if (refreshInterval) clearInterval(refreshInterval);
+});
+
+function getDisplayPrice(symbol, backupPrice) {
+    const p = livePrices[symbol]?.price || backupPrice;
+    return p ? formatCurrency(p) : '--';
+}
+
+function getDisplayTrend(symbol) {
+    const chg = livePrices[symbol]?.change_percent;
+    if (chg === undefined || chg === null) return '--';
+    return (chg > 0 ? '+' : '') + chg.toFixed(2) + '%';
+}
+
+function getTrendClass(symbol) {
+    const chg = livePrices[symbol]?.change_percent;
+    if (chg === undefined || chg === null) return '';
+    if (chg > 0) return 'positive';
+    if (chg < 0) return 'negative';
+    return '';
+}
+
+async function refreshPrices() {
+    if(isUpdating.value) return;
+    isUpdating.value = true;
+    try {
+        const symbols = new Set();
+        // Rockets
+        if (props.rocketsTrades.risk) props.rocketsTrades.risk.forEach(t => symbols.add(t.symbol));
+        if (props.rocketsTrades.neutralized) props.rocketsTrades.neutralized.forEach(t => symbols.add(t.symbol));
+        // Assigned
+        if (props.assignedTrades) props.assignedTrades.forEach(t => symbols.add(t.symbol));
+        
+        const prices = await fetchPrices(Array.from(symbols));
+        Object.assign(livePrices, prices);
+    } catch(e) { 
+        // Silent error
+    } finally {
+        isUpdating.value = false;
+    }
+}
 
 const closedTradesWithStats = computed(() => {
     if (!props.rocketsTrades || !props.rocketsTrades.closed) return [];
@@ -923,4 +1016,26 @@ h3 {
     color: black;
 }
 .warning-btn:hover { background: #f57c00; }
+
+.refresh-mini {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0 4px;
+    margin-left: 4px;
+}
+.refresh-mini:hover { color: var(--text-color); }
+.refresh-mini:disabled { opacity: 0.5; cursor: default; }
+
+.positive {
+    color: #4caf50;
+    font-weight: 600;
+}
+.negative {
+    color: #f44336;
+    font-weight: 600;
+}
 </style>
+

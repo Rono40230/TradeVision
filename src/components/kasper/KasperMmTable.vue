@@ -5,9 +5,11 @@
                  <thead>
                      <tr>
                          <th>Paire</th>
-                         <th>Valeur PIPS ($)</th>
-                         <th>Nb PIPS (SL)</th>
-                         <th>Risque (%)</th>
+                         <th>
+                             Valeur du PIP
+                         </th>
+                         <th>SL en PIPS</th>
+                         <th>Risque</th>
                          <th>Investi</th>
                          <th>Lot</th>
                          <th>Actions</th>
@@ -16,8 +18,8 @@
                  <tbody>
                      <tr v-for="pair in pairsConfig" :key="pair.id">
                          <td>{{ pair.symbol }}</td>
-                         <td>
-                             <input type="number" v-model.number="pair.pip_value" step="0.1" @change="onUpdatePair(pair)">
+                         <td style="text-align: center;">
+                             {{ pair.pip_value }} $
                          </td>
                          <td>
                              <input type="number" v-model.number="pair.sl_pips" step="1" @change="onUpdatePair(pair)">
@@ -50,7 +52,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { fetchPrices, formatForexSymbol } from '../../composables/useMarketData.js';
 
 const props = defineProps({
     pairsConfig: Array,
@@ -58,9 +61,84 @@ const props = defineProps({
     currentCapital: Number
 });
 
+const isUpdating = ref(false);
+let intervalId = null;
+
 const emit = defineEmits(['updatePair', 'deletePair', 'addPair']);
 
 const newPairSymbol = ref('');
+
+onMounted(() => {
+    updatePipValues();
+    intervalId = setInterval(updatePipValues, 15000);
+});
+
+onUnmounted(() => {
+    if (intervalId) clearInterval(intervalId);
+});
+
+async function updatePipValues() {
+    isUpdating.value = true;
+    try {
+        const symbolsToFetch = new Set();
+        
+        props.pairsConfig.forEach(p => {
+            const pair = p.symbol;
+            if(pair.length !== 6) return; // Ignore non-forex length
+            
+            const base = pair.substring(0, 3);
+            const quote = pair.substring(3, 6);
+            
+            symbolsToFetch.add(formatForexSymbol(pair)); // Pair itself
+            if(quote !== 'USD') {
+                symbolsToFetch.add(formatForexSymbol(`${quote}USD`));
+                symbolsToFetch.add(formatForexSymbol(`USD${quote}`));
+            }
+        });
+
+        const prices = await fetchPrices(Array.from(symbolsToFetch));
+        
+        // Calculate
+        props.pairsConfig.forEach(p => {
+            const pair = p.symbol;
+            if(pair.length !== 6) return;
+            
+            const quote = pair.substring(3, 6);
+            let val = 10; // Base for USD quote
+
+            if (quote !== 'USD') {
+                // Try QuoteUSD (note: prices is now object of objects {price, change_percent})
+                const qUsd = prices[`${quote}USD=X`];
+                if (qUsd && qUsd.price) {
+                    val = 10 * qUsd.price;
+                } else {
+                    // Try USDQuote (e.g. USDJPY)
+                    const usdQ = prices[`USD${quote}=X`] || prices[`${pair}=X`]; 
+                    if (usdQ && usdQ.price) {
+                        val = 10 / usdQ.price;
+                    }
+                }
+            }
+
+            // Correction Spéciale JPY (Pip = 0.01 au lieu de 0.0001)
+            // Donc la valeur doit être multipliée par 100
+            if (quote === 'JPY') {
+                val *= 100;
+            }
+            
+            // Update if changed signifcantly
+            if (val && Math.abs(p.pip_value - val) > 0.01) {
+                p.pip_value = parseFloat(val.toFixed(2));
+                onUpdatePair(p);
+            }
+        });
+
+    } catch (e) {
+        // Log error suppressed for audit
+    } finally {
+        isUpdating.value = false;
+    }
+}
 
 function onUpdatePair(pair) {
     emit('updatePair', pair);
@@ -154,4 +232,16 @@ function calculateLot(pair) {
     margin-right: 1rem; 
     text-transform: uppercase;
 }
+
+.refresh-mini {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0 4px;
+}
+.refresh-mini:hover { color: var(--text-color); }
+.refresh-mini:disabled { opacity: 0.5; cursor: default; }
+
 </style>
