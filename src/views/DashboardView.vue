@@ -128,7 +128,7 @@ const kasperChartData = computed(() => {
         values.push(base + cumPL);
     });
 
-    return { labels, values };
+    return { labels, values, baseline: base };
 });
 
 async function loadRocketStats() {

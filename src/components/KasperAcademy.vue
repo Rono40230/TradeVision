@@ -1,5 +1,6 @@
 <template>
   <div class="kasper-academy">
+    
     <KasperMetrics 
         :account="account" 
         :metrics="metrics" 

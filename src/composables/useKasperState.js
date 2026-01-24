@@ -1,14 +1,19 @@
+// src/composables/useKasperState.js
 import { ref, computed } from 'vue';
 import { initDB } from "../utils/db.js";
 
-export function useKasperState() {
-    const db = ref(null);
-    const account = ref({ capital: 5000 }); // Default fallback
-    const dailyEntries = ref([]);
-    const pairsConfig = ref([]);
-    const currentMonth = ref(new Date());
+// -- GLOBAL STATE (Singleton) --
+const db = ref(null);
+const account = ref({ capital: 5000 }); // Default, updated on load
+const currentAccountId = ref(null);
+const accountsList = ref([]);
+const dailyEntries = ref([]);
+const pairsConfig = ref([]);
+const currentMonth = ref(new Date());
 
-    // Metrics
+export function useKasperState() {
+
+    // Metrics computed from global 'dailyEntries'
     const metrics = computed(() => {
         let totalPlus = 0;
         let totalMinus = 0;
@@ -30,7 +35,6 @@ export function useKasperState() {
                     const trades = JSON.parse(e.details);
                     if (Array.isArray(trades)) {
                         trades.forEach(t => {
-                            // Count trades that have a result
                             if (t.result !== null && t.result !== undefined && t.result !== '') {
                                 totalTrades++;
                                 if (parseFloat(t.result) > 0) winningTrades++;
@@ -51,23 +55,77 @@ export function useKasperState() {
     });
 
     async function init() {
+        if (db.value) return; // Prevent double init
+        
         db.value = await initDB();
         
-        // Ensure table exists for daily journal
+        // 1. KASPER ACCOUNTS TABLE
         await db.value.execute(`
-            CREATE TABLE IF NOT EXISTS kasper_daily_journal (
+            CREATE TABLE IF NOT EXISTS kasper_accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date TEXT NOT NULL UNIQUE,
-                profit_loss REAL DEFAULT 0,
-                risk_used REAL DEFAULT 0,
-                notes TEXT,
-                details TEXT,
+                name TEXT NOT NULL,
+                account_number TEXT,
+                initial_capital REAL DEFAULT 0,
+                currency TEXT DEFAULT 'USD',
+                is_default BOOLEAN DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
-        // Migration for details column
-        try { await db.value.execute("ALTER TABLE kasper_daily_journal ADD COLUMN details TEXT"); } catch (e) {}
+        try { await db.value.execute("ALTER TABLE kasper_accounts ADD COLUMN account_number TEXT"); } catch (e) {}
+
+        // Seed default account if none
+        const existingAccounts = await db.value.select("SELECT * FROM kasper_accounts");
+        let defaultAccountId = 1;
+        if (existingAccounts.length === 0) {
+             const res = await db.value.execute("INSERT INTO kasper_accounts (name, initial_capital, is_default) VALUES ('Compte Principal', 5000, 1)");
+             defaultAccountId = res.lastInsertId;
+        } else {
+             const def = existingAccounts.find(a => a.is_default);
+             defaultAccountId = def ? def.id : existingAccounts[0].id;
+        }
+
+        // 2. DAILY JOURNAL MIGRATION (Multi-account support)
+        const tableDef = await db.value.select("SELECT sql FROM sqlite_master WHERE type='table' AND name='kasper_daily_journal'");
+        
+        if (tableDef.length === 0) {
+             await db.value.execute(`
+                CREATE TABLE IF NOT EXISTS kasper_daily_journal (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER DEFAULT 1,
+                    date TEXT NOT NULL,
+                    profit_loss REAL DEFAULT 0,
+                    risk_used REAL DEFAULT 0,
+                    notes TEXT,
+                    details TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(date, account_id),
+                    FOREIGN KEY(account_id) REFERENCES kasper_accounts(id)
+                )
+            `);
+        } else if (!tableDef[0].sql.includes('account_id')) {
+            await db.value.execute("ALTER TABLE kasper_daily_journal RENAME TO kasper_daily_journal_old");
+            await db.value.execute(`
+                CREATE TABLE kasper_daily_journal (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER DEFAULT 1,
+                    date TEXT NOT NULL,
+                    profit_loss REAL DEFAULT 0,
+                    risk_used REAL DEFAULT 0,
+                    notes TEXT,
+                    details TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(date, account_id),
+                    FOREIGN KEY(account_id) REFERENCES kasper_accounts(id)
+                )
+            `);
+            await db.value.execute(`
+                INSERT INTO kasper_daily_journal (date, profit_loss, risk_used, notes, details, created_at, account_id)
+                SELECT date, profit_loss, risk_used, notes, details, created_at, ? 
+                FROM kasper_daily_journal_old
+            `, [defaultAccountId]);
+            await db.value.execute("DROP TABLE kasper_daily_journal_old");
+        }
 
         // Ensure table exists for Pair Config
         await db.value.execute(`
@@ -81,6 +139,24 @@ export function useKasperState() {
             )
         `);
 
+        // Init State
+        await loadAccountsList();
+        
+        // If no account selected, select default
+        if (!currentAccountId.value && accountsList.value.length > 0) {
+            const def = accountsList.value.find(a => a.is_default);
+            currentAccountId.value = def ? def.id : accountsList.value[0].id;
+            
+            // Fix legacy default account data
+            if (currentAccountId.value) {
+                const acc = accountsList.value.find(a => a.id === currentAccountId.value);
+                 if (acc.name === 'Compte Principal' && !acc.account_number) {
+                    await db.value.execute("UPDATE kasper_accounts SET name = 'AXI', account_number = '6618240' WHERE id = ?", [acc.id]);
+                    await loadAccountsList();
+                }
+            }
+        }
+
         await loadAccount();
         await loadentries();
         await loadPairs();
@@ -91,7 +167,6 @@ export function useKasperState() {
         const rows = await db.value.select("SELECT * FROM kasper_pairs");
         
         if (rows.length === 0) {
-            // Seed initial data
             const seeds = [
                 { symbol: 'BTC', pip_value: 1, sl_pips: 350, risk_pct: 1 },
                 { symbol: 'XAUUSD', pip_value: 10, sl_pips: 50, risk_pct: 1 },
@@ -138,59 +213,110 @@ export function useKasperState() {
          await loadPairs();
     }
 
-    async function loadAccount() {
+    async function loadAccountsList() {
         if (!db.value) return;
-        const res = await db.value.select("SELECT * FROM accounts WHERE name = 'Kasper Academy'");
+        accountsList.value = await db.value.select("SELECT * FROM kasper_accounts ORDER BY id ASC");
+    }
+
+    async function loadAccount() {
+        if (!db.value || !currentAccountId.value) return;
+        
+        const res = await db.value.select("SELECT * FROM kasper_accounts WHERE id = ?", [currentAccountId.value]);
         if (res.length > 0) {
-            account.value = res[0];
-        } else {
-            // Create if missing
-            await db.value.execute("INSERT INTO accounts (name, capital) VALUES ('Kasper Academy', 5000)");
-            account.value = { name: 'Kasper Academy', capital: 5000 };
+            // Map 'initial_capital' to 'capital' for compatibility with existing UI
+            account.value = { 
+                ...res[0], 
+                capital: res[0].initial_capital 
+            };
         }
+    }
+    
+    async function switchAccount(id) {
+        currentAccountId.value = id;
+        await loadAccount();
+        await loadentries();
+    }
+
+    async function addAccount(name, initialCapital, currency, accountNumber) {
+        if (!db.value) return;
+        await db.value.execute(
+            "INSERT INTO kasper_accounts (name, initial_capital, currency, account_number) VALUES (?, ?, ?, ?)", 
+            [name, initialCapital, currency || 'USD', accountNumber || '']
+        );
+        await loadAccountsList();
     }
 
     async function updateCapital(newCapital) {
-        if (!db.value) return;
-        await db.value.execute("UPDATE accounts SET capital = ? WHERE name = 'Kasper Academy'", [newCapital]);
+        if (!db.value || !currentAccountId.value) return;
+        await db.value.execute("UPDATE kasper_accounts SET initial_capital = ? WHERE id = ?", [newCapital, currentAccountId.value]);
         await loadAccount();
     }
 
     async function loadentries() {
-        if (!db.value) return;
-        // Load all entries for metrics, or maybe just current year? For now all.
-        dailyEntries.value = await db.value.select("SELECT * FROM kasper_daily_journal ORDER BY date ASC");
+        if (!db.value || !currentAccountId.value) return;
+        dailyEntries.value = await db.value.select(
+            "SELECT * FROM kasper_daily_journal WHERE account_id = ? ORDER BY date ASC", 
+            [currentAccountId.value]
+        );
     }
 
     async function saveDailyEntry(date, profitLoss, riskUsed, details) {
-        if (!db.value) return;
+        if (!db.value || !currentAccountId.value) return;
         
-        // Check if exists
-        const existing = dailyEntries.value.find(e => e.date === date);
-        const oldPL = existing ? existing.profit_loss : 0;
-        const diffPL = parseFloat(profitLoss) - oldPL;
+        // Check if exists for THIS account
+        const existing = await db.value.select(
+            "SELECT * FROM kasper_daily_journal WHERE date = ? AND account_id = ?", 
+            [date, currentAccountId.value]
+        );
+        
         const detailsStr = details ? JSON.stringify(details) : null;
 
-        if (existing) {
+        if (existing.length > 0) {
             await db.value.execute(
-                "UPDATE kasper_daily_journal SET profit_loss = ?, risk_used = ?, details = ? WHERE date = ?", 
-                [profitLoss, riskUsed || 0, detailsStr, date]
+                "UPDATE kasper_daily_journal SET profit_loss = ?, risk_used = ?, details = ? WHERE date = ? AND account_id = ?", 
+                [profitLoss, riskUsed || 0, detailsStr, date, currentAccountId.value]
             );
         } else {
             await db.value.execute(
-                "INSERT INTO kasper_daily_journal (date, profit_loss, risk_used, details) VALUES (?, ?, ?, ?)",
-                [date, profitLoss, riskUsed || 0, detailsStr]
+                "INSERT INTO kasper_daily_journal (date, profit_loss, risk_used, details, account_id) VALUES (?, ?, ?, ?, ?)",
+                [date, profitLoss, riskUsed || 0, detailsStr, currentAccountId.value]
             );
         }
-
-        // Capital is FIXED (Invested), do not auto-update it with P/L.
-        // P/L are calculated dynamically via metrics.
 
         await loadentries();
     }
 
+    async function deleteAccount(id) {
+        if (!db.value) return;
+
+        // Prevent deleting the last account
+        if (accountsList.value.length <= 1) {
+            // Impossible de supprimer le dernier compte
+            return;
+        }
+
+        // Delete associated entries
+        await db.value.execute("DELETE FROM kasper_daily_journal WHERE account_id = ?", [id]);
+        
+        // Delete the account
+        await db.value.execute("DELETE FROM kasper_accounts WHERE id = ?", [id]);
+        
+        // Reload list
+        await loadAccountsList();
+
+        // If current account was deleted, switch to the first available one
+        if (currentAccountId.value === id) {
+            const nextId = accountsList.value[0]?.id;
+            if (nextId) {
+                await switchAccount(nextId);
+            }
+        }
+    }
+
     return {
         account,
+        currentAccountId,
+        accountsList,
         dailyEntries,
         pairsConfig,
         metrics,
@@ -199,6 +325,9 @@ export function useKasperState() {
         saveDailyEntry,
         updatePair,
         addPair,
-        deletePair
+        deletePair,
+        switchAccount,
+        addAccount,
+        deleteAccount
     };
 }

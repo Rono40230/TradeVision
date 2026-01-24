@@ -1,5 +1,10 @@
 <template>
     <div class="kasper-metrics">
+        <!-- Account Switcher -->
+        <div class="metric-group switcher-group">
+            <KasperAccountSwitcher />
+        </div>
+
         <div class="metric-group">
             <span class="label">Capital Investi</span>
             <span class="value action-value" @click="$emit('openCapitalModal')">{{ formatCurrency(account?.capital) }}</span>
@@ -26,6 +31,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import KasperAccountSwitcher from './KasperAccountSwitcher.vue';
 
 const props = defineProps({
     account: Object,
@@ -63,6 +69,7 @@ function formatWinrate(val) {
 .kasper-metrics {
     display: flex;
     justify-content: space-around;
+    align-items: center;
     background: var(--surface-color);
     padding: 1rem;
     border-radius: 8px;
@@ -73,6 +80,41 @@ function formatWinrate(val) {
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+/* Switcher Integration */
+.switcher-group {
+    /* No column direction for this one if we want just the button */
+    display: flex;
+    justify-content: center;
+    /* ensure it doesn't shrink awkwardly */
+    min-width: 150px; 
+}
+
+/* Account Badge Style - Removed/Deprecated */
+.metric-group.account-badge {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0 1.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    justify-content: center;
+}
+.account-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+}
+.acc-name {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 1.1rem;
+}
+.acc-num {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-family: monospace;
+    letter-spacing: 0.5px;
 }
 
 .metric-group .label {

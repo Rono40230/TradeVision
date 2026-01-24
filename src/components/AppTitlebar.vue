@@ -72,6 +72,7 @@ const close = async () => {
   border-bottom: 1px solid var(--border-color);
   flex: 0 0 auto;
   padding-left: 10px;
+  position: relative;
 }
 
 .drag-region {
@@ -80,6 +81,9 @@ const close = async () => {
 }
 
 .nav-tabs {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     gap: 0.5rem;
     height: 100%;

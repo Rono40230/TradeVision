@@ -22,6 +22,7 @@
                  <SimpleLineChart 
                     :labels="chartData.labels" 
                     :data="chartData.values"
+                    :baseline="chartData.baseline"
                     color="#9c27b0"
                     fillColor="rgba(156, 39, 176, 0.05)"
                     label="Capital ($)"
