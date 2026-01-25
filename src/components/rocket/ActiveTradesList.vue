@@ -2,7 +2,46 @@
   <div class="right-column-lists">
       <!-- Active Trades Block -->
       <div class="active-trades-block">
-        <h3 v-if="strategyType !== 'rockets'">Trades en Cours</h3>
+        <div class="active-trades-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 v-if="strategyType !== 'rockets'" style="margin: 0;">Trades en Cours</h3>
+            
+            <!-- View Switcher for Wheel -->
+            <div v-if="strategyType === 'wheel'" class="view-switcher">
+                <button 
+                    class="switcher-btn" 
+                    :class="{ active: wheelViewMode === 'journal' }"
+                    @click="wheelViewMode = 'journal'"
+                >
+                    📓 Journal
+                </button>
+                <button 
+                    class="switcher-btn" 
+                    :class="{ active: wheelViewMode === 'pilotage' }"
+                    @click="wheelViewMode = 'pilotage'"
+                >
+                    ✈️ Pilotage
+                </button>
+            </div>
+
+            <!-- View Switcher for PCS -->
+            <div v-if="strategyType === 'pcs'" class="view-switcher">
+                <button 
+                    class="switcher-btn" 
+                    :class="{ active: pcsViewMode === 'journal' }"
+                    @click="pcsViewMode = 'journal'"
+                >
+                    📓 Journal
+                </button>
+                <button 
+                    class="switcher-btn" 
+                    :class="{ active: pcsViewMode === 'pilotage' }"
+                    @click="pcsViewMode = 'pilotage'"
+                >
+                    ✈️ Pilotage
+                </button>
+            </div>
+        </div>
+
         <div class="table-container">
             
                 <!-- WHEEL/OPTIONS TABLE -->
@@ -11,76 +50,131 @@
                     <tr>
                         <th>Symbole</th>
                         <th>Type</th>
-                        <th>Statut</th>
-                        <th>Ouvert le</th>
-                        <th>Expiration</th>
-                        <th>Taille pos.</th>
-                        <th>Strike</th>
-                        <th>Prime</th> <!-- Unit Price -->
-                        <th>Coût contrat</th> <!-- Strike x 100 -->
-                        <th>Qté</th>
-                        <th>Cash bloqué</th>
-                        <th>Rendement</th>
-                        <th>Prime attendue</th> <!-- Total Premium -->
+
+                        <!-- MODE JOURNAL -->
+                        <template v-if="wheelViewMode === 'journal'">
+                            <th>Statut</th>
+                            <th>Ouvert le</th>
+                            <th>Expiration</th>
+                            <th>Taille pos.</th>
+                            <th>Strike</th>
+                            <th>Prime</th> <!-- Unit Price -->
+                            <th>Coût contrat</th> <!-- Strike x 100 -->
+                            <th>Qté</th>
+                            <th>Cash bloqué</th>
+                            <th>Rendement</th>
+                            <th>Prime attendue</th>
+                        </template>
+
+                        <!-- MODE PILOTAGE -->
+                        <template v-if="wheelViewMode === 'pilotage'">
+                            <th>Expiration</th>
+                            <th>Strike</th>
+                            <th>Prix Action</th>
+                            <th>Dist. Strike</th>
+                            <th>Prix Option</th>
+                            <th>% Profit</th>
+                            <th>P/L Latent</th>
+                            <th>Qté</th>
+                            <th>Prime Encaissée</th>
+                        </template>
+
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-if="wheelOptions.length === 0">
-                        <td colspan="14" class="empty-cell">Aucun trade d'options en cours.</td>
+                        <td :colspan="wheelViewMode === 'journal' ? 14 : 10" class="empty-cell">Aucun trade d'options en cours.</td>
                     </tr>
                     <tr v-for="trade in wheelOptions" :key="trade.id">
                         <td>{{ trade.symbol }}</td>
                         <td><span class="type-badge" :class="getTypeClass(trade)">{{ formatType(trade) }}</span></td>
-                        <td>
-                            <!-- Status Dropdown -->
-                            <select 
-                                :value="trade.status" 
-                                @change="onUpdateStatus(trade, $event.target.value)"
-                                class="status-select"
-                                :class="{'status-pending': trade.status === 'pending', 'status-open': trade.status === 'open'}"
-                            >
-                                <option value="pending">En attente</option>
-                                <option value="open">Ouvert</option>
-                            </select>
-                        </td>
-                        <td>
-                            <input 
-                                v-if="trade.status === 'open'" 
-                                type="date" 
-                                :value="trade.open_date || trade.date" 
-                                @change="$emit('update-date', trade, $event.target.value)"
-                                class="date-input-table"
-                            />
-                            <span v-else>-</span>
-                        </td>
-                        <td>{{ formatDate(trade.expiration) }}</td>
-                        <td>{{ trade.position_size_pct ? trade.position_size_pct + '%' : '-' }}</td>
-                        <td>{{ trade.strike }}</td>
-                        <td>{{ formatCurrency(trade.price) }}</td>
-                        <td>
-                            <span v-if="trade.sub_strategy === 'hedge_spread' || trade.sub_strategy === 'hedge' || trade.type === 'spread' || trade.sub_strategy === 'call' || (trade.type === 'call' && trade.side === 'short')">-</span>
-                            <span v-else>{{ formatCurrency(trade.strike * 100) }}</span>
-                        </td>
-                        <td>{{ trade.quantity }}</td>
-                        <td>
-                            <span v-if="trade.sub_strategy === 'call' || (trade.type === 'call' && trade.side === 'short')">-</span>
-                            <span v-else-if="trade.sub_strategy === 'hedge_spread' || trade.sub_strategy === 'hedge' || trade.type === 'spread'">
-                                {{ formatCurrency(trade.entry_price ? (trade.entry_price * 100 * trade.quantity) : (trade.price * 100 * trade.quantity)) }} (Debit)
-                            </span>
-                             <span v-else>
-                                {{ formatCurrency(trade.strike * 100 * trade.quantity) }}
-                             </span>
-                        </td>
-                        <td>{{ trade.type === 'spread' || trade.sub_strategy === 'hedge' ? '-' : (trade.target_yield ? trade.target_yield + '%' : ((trade.price / trade.strike) * 100).toFixed(2) + '%') }}</td>
-                        <td>
-                             <span v-if="trade.sub_strategy === 'hedge' || trade.sub_strategy === 'hedge_spread'">
-                                 -
-                             </span>
-                             <span v-else>
-                                {{ formatCurrency(trade.target_yield ? (trade.strike * 100 * trade.quantity * (trade.target_yield / 100)) : (trade.price * 100 * trade.quantity)) }}
-                             </span>
-                        </td>
+                        
+                        <!-- JOURNAL VIEW -->
+                        <template v-if="wheelViewMode === 'journal'">
+                            <td>
+                                <!-- Status Dropdown -->
+                                <select 
+                                    :value="trade.status" 
+                                    @change="onUpdateStatus(trade, $event.target.value)"
+                                    class="status-select"
+                                    :class="{'status-pending': trade.status === 'pending', 'status-open': trade.status === 'open'}"
+                                >
+                                    <option value="pending">En attente</option>
+                                    <option value="open">Ouvert</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input 
+                                    v-if="trade.status === 'open'" 
+                                    type="date" 
+                                    :value="trade.open_date || trade.date" 
+                                    @change="$emit('update-date', trade, $event.target.value)"
+                                    class="date-input-table"
+                                />
+                                <span v-else>-</span>
+                            </td>
+                            <td>{{ formatDate(trade.expiration) }}</td>
+                            <td>{{ trade.position_size_pct ? trade.position_size_pct + '%' : '-' }}</td>
+                            <td>{{ trade.strike }}</td>
+                            <td>{{ formatCurrency(trade.price) }}</td>
+                            <td>
+                                <span v-if="trade.sub_strategy === 'hedge_spread' || trade.sub_strategy === 'hedge' || trade.type === 'spread' || trade.sub_strategy === 'call' || (trade.type === 'call' && trade.side === 'short')">-</span>
+                                <span v-else>{{ formatCurrency(trade.strike * 100) }}</span>
+                            </td>
+                            <td>{{ trade.quantity }}</td>
+                            <td>
+                                <span v-if="trade.sub_strategy === 'call' || (trade.type === 'call' && trade.side === 'short')">-</span>
+                                <span v-else-if="trade.sub_strategy === 'hedge_spread' || trade.sub_strategy === 'hedge' || trade.type === 'spread'">
+                                    {{ formatCurrency(trade.entry_price ? (trade.entry_price * 100 * trade.quantity) : (trade.price * 100 * trade.quantity)) }} (Debit)
+                                </span>
+                                <span v-else>
+                                    {{ formatCurrency(trade.strike * 100 * trade.quantity) }}
+                                </span>
+                            </td>
+                            <td>{{ trade.type === 'spread' || trade.sub_strategy === 'hedge' ? '-' : (trade.target_yield ? trade.target_yield + '%' : ((trade.price / trade.strike) * 100).toFixed(2) + '%') }}</td>
+                            <td>
+                                <span v-if="trade.sub_strategy === 'hedge' || trade.sub_strategy === 'hedge_spread'">
+                                    -
+                                </span>
+                                <span v-else>
+                                    {{ formatCurrency(trade.target_yield ? (trade.strike * 100 * trade.quantity * (trade.target_yield / 100)) : (trade.price * 100 * trade.quantity)) }}
+                                </span>
+                            </td>
+                        </template>
+
+                        <!-- PILOTAGE VIEW -->
+                        <template v-if="wheelViewMode === 'pilotage'">
+                            <td>{{ formatDate(trade.expiration) }}</td>
+                            <td>{{ trade.strike }}</td>
+                            <td :class="getTrendClass(trade.symbol)">
+                                {{ getDisplayPrice(trade.symbol) }}
+                            </td>
+                            <td :class="getMoneynessClass(trade)" style="font-weight: bold;">
+                                {{ getDistanceToStrike(trade) }}
+                            </td>
+                            
+                            <!-- Prix Option (Mark) -->
+                            <td>
+                                {{ getDisplayOptionPrice(trade) }}
+                            </td>
+                            
+                            <!-- % Profit -->
+                            <td :class="getProfitProgressClass(trade)">
+                                {{ getProfitProgress(trade) }}
+                            </td>
+
+                            <!-- P/L Latent -->
+                            <td :class="getLatentPLClass(trade)">
+                                {{ getLatentPL(trade) }}
+                            </td>
+
+                            <td>{{ trade.quantity }}</td>
+                            <td>
+                                {{ formatCurrency(trade.price * 100 * trade.quantity) }}
+                            </td>
+                        </template>
+
                         <td class="actions-cell">
                             <button v-if="canAssign(trade) && trade.status === 'open'" class="action-btn assign-btn" @click="$emit('assign', trade)">Assign</button>
                             <button v-if="trade.status !== 'closed' && trade.status !== 'assigned'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
@@ -96,65 +190,125 @@
                     <tr>
                         <th>Symbole</th>
                         <th>Type</th>
-                        <th>Statut</th>
-                        <th>Ouvert le</th>
-                        <th>Terme</th>
-                        <th>Vente Put</th>
-                        <th>Achat Put</th>
-                        <th>Vente Call</th>
-                        <th>Achat Call</th>
-                        <th>Strike</th> <!-- Width -->
-                        <th>Cash Bloqué</th>
-                        <th>Nb Contrats</th>
+
+                        <!-- JOURNAL MODE -->
+                        <template v-if="pcsViewMode === 'journal'">
+                            <th>Statut</th>
+                            <th>Ouvert le</th>
+                            <th>Terme</th>
+                            <th>Vente Put</th>
+                            <th>Achat Put</th>
+                            <th>Vente Call</th>
+                            <th>Achat Call</th>
+                            <th>Largeur</th>
+                            <th>Crédit Net</th>
+                            <th>Risque Max</th>
+                            <th>Rdt / Risque</th>
+                            <th>Cash Bloqué</th>
+                            <th>Nb Contrats</th>
+                        </template>
+
+                        <!-- PILOTAGE MODE -->
+                        <template v-if="pcsViewMode === 'pilotage'">
+                             <th>Terme</th>
+                             <th>Prix Action</th>
+                             <th>Dist. Short</th>
+                             <th>Prob. ITM</th>
+                             <th>Prix Spread</th>
+                             <th>P/L Latent</th>
+                             <th>% Profit</th>
+                        </template>
+
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                         <tr v-if="pcsTrades.length === 0">
-                        <td colspan="13" class="empty-cell">Aucun PCS en cours.</td>
+                        <td :colspan="pcsViewMode === 'journal' ? 14 : 10" class="empty-cell">Aucun PCS en cours.</td>
                     </tr>
                     <tr v-for="trade in pcsTrades" :key="trade.id">
                         <td>{{ trade.symbol }}</td>
                         <td><span class="type-badge" :class="trade.sub_strategy === 'ic' ? 'ic' : 'pcs'">{{ trade.sub_strategy === 'ic' ? 'Iron Condor' : 'Standard' }}</span></td>
-                        <td>
-                             <select 
-                                :value="trade.status" 
-                                @change="onUpdateStatus(trade, $event.target.value)"
-                                class="status-select"
-                                :class="{'status-pending': trade.status === 'pending', 'status-open': trade.status === 'open'}"
-                            >
-                                <option value="pending">En attente</option>
-                                <option value="open">Ouvert</option>
-                            </select>
-                        </td>
-                         <td>
-                            <input 
-                                type="date" 
-                                :value="trade.open_date || trade.date" 
-                                @change="$emit('update-date', trade, $event.target.value)"
-                                class="date-input-table"
-                            />
-                        </td>
-                        <td>{{ formatDate(trade.expiration) }}</td>
                         
-                        <!-- Puts -->
-                        <td>{{ trade.strike_short || '-' }}</td>
-                        <td>{{ trade.strike_long || '-' }}</td>
-                        
-                        <!-- Calls -->
-                        <td>{{ trade.strike_call_short || '-' }}</td>
-                        <td>{{ trade.strike_call_long || '-' }}</td>
+                        <!-- JOURNAL VIEW -->
+                        <template v-if="pcsViewMode === 'journal'">
+                            <td>
+                                <select 
+                                    :value="trade.status" 
+                                    @change="onUpdateStatus(trade, $event.target.value)"
+                                    class="status-select"
+                                    :class="{'status-pending': trade.status === 'pending', 'status-open': trade.status === 'open'}"
+                                >
+                                    <option value="pending">En attente</option>
+                                    <option value="open">Ouvert</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input 
+                                    type="date" 
+                                    :value="trade.open_date || trade.date" 
+                                    @change="$emit('update-date', trade, $event.target.value)"
+                                    class="date-input-table"
+                                />
+                            </td>
+                            <td>{{ formatDate(trade.expiration) }}</td>
+                            
+                            <!-- Puts -->
+                            <td>{{ trade.strike_short || '-' }}</td>
+                            <td>{{ trade.strike_long || '-' }}</td>
+                            
+                            <!-- Calls -->
+                            <td>{{ trade.item_call_short || '-' }}</td>
+                            <td>{{ trade.item_call_long || '-' }}</td>
 
-                        <!-- Strike / Width -->
-                        <td>{{ Math.abs(trade.strike_short - trade.strike_long).toFixed(2) }}</td>
-                        
-                         <!-- Cash Bloqué -->
-                        <td>{{ formatCurrency(Math.abs(trade.strike_short - trade.strike_long) * 100 * trade.quantity) }}</td>
+                            <!-- Metrics -->
+                            <td>{{ formatCurrency(Math.abs((trade.strike_short || 0) - (trade.strike_long || 0))) }}</td>
+                            <td>{{ formatCurrency(trade.price) }}</td>
+                            
+                            <!-- Max Risk: (Width - Credit) * 100 * Qty -->
+                            <td>{{ formatCurrency((Math.abs((trade.strike_short || 0) - (trade.strike_long || 0)) - trade.price) * 100 * trade.quantity) }}</td>
+                            
+                            <!-- Yield/Risk: Credit / Max Risk -->
+                            <td>{{ trade.price && (Math.abs((trade.strike_short || 0) - (trade.strike_long || 0)) - trade.price) > 0 ? ((trade.price / (Math.abs((trade.strike_short || 0) - (trade.strike_long || 0)) - trade.price)) * 100).toFixed(2) + '%' : '-' }}</td>
 
-                        <td>{{ trade.quantity }}</td>
+                            <!-- Cash Bloqué (Risk Max * Qty) -->
+                            <td>{{ formatCurrency((Math.abs((trade.strike_short || 0) - (trade.strike_long || 0)) - trade.price) * 100 * trade.quantity) }}</td>
+                            
+                            <td>{{ trade.quantity }}</td>
+                        </template>
+
+                         <!-- PILOTAGE VIEW -->
+                        <template v-if="pcsViewMode === 'pilotage'">
+                             <td>{{ formatDate(trade.expiration) }}</td>
+                             
+                             <td :class="getTrendClass(trade.symbol)">
+                                {{ getDisplayPrice(trade.symbol) }}
+                            </td>
+                            
+                            <!-- Distance Short -->
+                            <td :class="getDistanceShortClass(trade)" style="font-weight: bold;">
+                                {{ getDistanceShort(trade) }}
+                            </td>
+
+                            <!-- Prob ITM -->
+                            <td>{{ getProbITM(trade) }}</td>
+
+                            <!-- Spread Price (Estimated) -->
+                            <td>{{ getSpreadPrice(trade) }}</td>
+
+                            <!-- P/L Latent -->
+                            <td :class="getSpreadPLClass(trade)">
+                                {{ getSpreadPL(trade) }}
+                            </td>
+
+                            <!-- % Profit -->
+                            <td :class="getSpreadProfitClass(trade)">
+                                {{ getSpreadProfit(trade) }}
+                            </td>
+                        </template>
 
                         <td class="actions-cell">
-                            <button v-if="trade.status !== 'closed'" class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
+                            <button class="action-btn close-btn" @click="onUpdateStatus(trade, 'closed')">Fermer</button>
                             <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
                         </td>
                     </tr>
@@ -547,6 +701,35 @@
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
 }
+
+.view-switcher {
+    display: flex;
+    background-color: var(--bg-secondary);
+    border-radius: 6px;
+    padding: 2px;
+}
+
+.switcher-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    padding: 6px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.switcher-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.switcher-btn:hover:not(.active) {
+    background-color: rgba(255, 255, 255, 0.1);
+}
 </style>
 
 <script setup>
@@ -566,6 +749,8 @@ const props = defineProps({
 
 const livePrices = reactive({});
 const isUpdating = ref(false);
+const wheelViewMode = ref('journal'); // 'journal' or 'pilotage'
+const pcsViewMode = ref('journal'); // 'journal' or 'pilotage'
 let refreshInterval = null;
 
 onMounted(() => {
@@ -597,6 +782,205 @@ function getTrendClass(symbol) {
     return '';
 }
 
+function getDistanceToStrike(trade) {
+    const current = livePrices[trade.symbol]?.price;
+    if (!current || !trade.strike) return '-';
+    // Pour un PUT : (Prix - Strike) / Prix. Si > 0, OTM. Si < 0, ITM.
+    // Pour un CALL : (Strike - Prix) / Prix. Si > 0, OTM. Si < 0, ITM.
+    // Simplification : Distance en % du prix actuel
+    const dist = ((current - trade.strike) / current) * 100;
+    return dist.toFixed(2) + '%';
+}
+
+function getBreakeven(trade) {
+    if (!trade.strike || !trade.price) return '-';
+    let be = 0;
+    // Short Put: Strike - Premium
+    // Short Call: Strike + Premium
+    const isPut = trade.type ? trade.type.toLowerCase().includes('put') : false;
+    // Note: trade.type might be just 'put' or 'call'
+    
+    if (isPut) {
+        be = trade.strike - trade.price;
+    } else {
+        be = trade.strike + trade.price;
+    }
+    return formatCurrency(be);
+}
+
+function getMoneynessClass(trade) {
+    const current = livePrices[trade.symbol]?.price;
+    if (!current || !trade.strike) return '';
+    const isPut = trade.type ? trade.type.toLowerCase().includes('put') : false;
+    
+    if (isPut) {
+        // Put ITM if Price < Strike (Danger)
+        return current < trade.strike ? 'negative-text' : 'positive-text';
+    } else {
+        // Call ITM if Price > Strike (Danger/Assignment)
+        return current > trade.strike ? 'negative-text' : 'positive-text';
+    }
+}
+
+// Helper for PCS Pilotage
+function getDistanceShort(trade) {
+    const current = livePrices[trade.symbol]?.price;
+    if (!current || !trade.strike_short) return '-';
+    // PCS (Bullish): Short Put is below price. Dist = (Price - Strike) / Price
+    // IC: Need to check both sides? Usually dist to closest Short.
+    // Assuming PCS (Short Put) for now as prime use case
+    if (trade.sub_strategy === 'pcs') {
+         const dist = ((current - trade.strike_short) / current) * 100;
+         return dist.toFixed(2) + '%';
+    }
+    return '-';
+}
+
+function getDistanceShortClass(trade) {
+    const val = parseFloat(getDistanceShort(trade));
+    if (isNaN(val)) return '';
+    if (val < 2) return 'negative-text font-bold'; // Danger zone < 2%
+    return 'positive-text';
+}
+
+function getProbITM(trade) {
+    // Requires Delta or complex calc. Placeholder.
+    // Simple proxy: If dist < 5%, Prob > 30%
+    const dist = parseFloat(getDistanceShort(trade));
+    if (isNaN(dist)) return '-';
+    if (dist < 0) return '99%'; // ITM
+    if (dist < 2) return '~45%';
+    if (dist < 5) return '~30%';
+    return '< 15%';
+}
+
+function getSpreadPrice(trade, raw = false) {
+    // Ideally: (ShortPutPrice - LongPutPrice)
+    const occShort = getOccSymbol({ ...trade, strike: trade.strike_short, type: 'put' }); 
+    const occLong = getOccSymbol({ ...trade, strike: trade.strike_long, type: 'put' }); 
+    
+    if (occShort && occLong && livePrices[occShort] && livePrices[occLong]) {
+        const pShort = livePrices[occShort].price;
+        const pLong = livePrices[occLong].price;
+        // Spread price is roughly (Short - Long) as we sold the spread (got credit)
+        // Current value to buy back = ShortAsk - LongBid (approximated by last price here)
+        const spreadPrice = pShort - pLong;
+        if(raw) return spreadPrice;
+        return formatCurrency(spreadPrice);
+    }
+    if(raw) return null;
+    return '0.00 $'; // Default instead of warning if data loading
+}
+
+function getSpreadProfit(trade) {
+    // (Credit - CurrentSpreadPrice) / Credit
+    const currentCost = getSpreadPrice(trade, true);
+    if (currentCost === null || !trade.price) return '-';
+    
+    // Profit % = (CreditReceived - CostToClose) / CreditReceived
+    const profitPct = ((trade.price - currentCost) / trade.price) * 100;
+    return profitPct.toFixed(1) + '%';
+}
+
+function getSpreadPL(trade) {
+    const currentCost = getSpreadPrice(trade, true);
+    if (currentCost === null || !trade.price) return '-';
+
+    // P/L = (CreditReceived - CostToClose) * 100 * Qty
+    const pl = (trade.price - currentCost) * 100 * trade.quantity;
+    return formatCurrency(pl);
+}
+
+function getSpreadPLClass(trade) {
+    const plStr = getSpreadPL(trade);
+    if(plStr === '-') return '';
+    // Check if positive currency string (might contain space, $, etc)
+    // formatCurrency usually returns "1 200,00 $" or "-50,00 $"
+    // Simple check on raw value is safer logic duplication
+    const currentCost = getSpreadPrice(trade, true);
+    if (currentCost === null || !trade.price) return '';
+    const val = trade.price - currentCost;
+    if(val > 0) return 'positive-text';
+    if(val < 0) return 'negative-text';
+    return '';
+}
+
+function getSpreadProfitClass(trade) {
+    const valStr = getSpreadProfit(trade);
+    if(valStr === '-') return '';
+    const val = parseFloat(valStr);
+    if(val >= 50) return 'positive-text';
+    if(val < 0) return 'negative-text';
+    return '';
+}
+
+// Helper to build Yahoo Option Symbol (OCC Format approximation)
+function getOccSymbol(trade) {
+    if (!trade.symbol || !trade.expiration || !trade.strike || !trade.type) return null;
+    
+    // Format: ROOTyyMMdd[C|P]strike(00000000)
+    // Ex: AAPL  230120C00150000
+    // Note: Yahoo format is usually simple: AAPL230120C00150000
+    
+    // 1. Date YYMMDD
+    const dateObj = new Date(trade.expiration);
+    const y = dateObj.getFullYear().toString().slice(2);
+    const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const d = (dateObj.getDate()).toString().padStart(2, '0');
+    
+    // 2. Type C/P
+    const typeChar = trade.type.toLowerCase().includes('put') ? 'P' : 'C';
+    
+    // 3. Strike * 1000 padded to 8 chars
+    const strikeVal = Math.round(trade.strike * 1000);
+    const strikeStr = strikeVal.toString().padStart(8, '0');
+    
+    return `${trade.symbol}${y}${m}${d}${typeChar}${strikeStr}`;
+}
+
+function getDisplayOptionPrice(trade) {
+    const sym = getOccSymbol(trade);
+    if (!sym || !livePrices[sym]) return '-';
+    // Yahoo returns price in normal version often, but sometimes need check
+    return formatCurrency(livePrices[sym].price);
+}
+
+function getProfitProgress(trade) {
+    const sym = getOccSymbol(trade);
+    const currentPrice = livePrices[sym]?.price;
+    if (currentPrice === undefined || !trade.price) return '-';
+    
+    // Profit % = (EntryPrice - CurrentPrice) / EntryPrice
+    // Valid for Short Options
+    const progress = ((trade.price - currentPrice) / trade.price) * 100;
+    return progress.toFixed(1) + '%';
+}
+
+function getProfitProgressClass(trade) {
+    const val = parseFloat(getProfitProgress(trade));
+    if (isNaN(val)) return '';
+    if (val >= 50) return 'positive-text'; // Good target for closing
+    if (val < 0) return 'negative-text';
+    return '';
+}
+
+function getLatentPL(trade) {
+    const sym = getOccSymbol(trade);
+    const currentPrice = livePrices[sym]?.price;
+    if (currentPrice === undefined || !trade.price) return '-';
+    
+    // P/L = (Entry - Current) * 100 * Qty
+    const pl = (trade.price - currentPrice) * 100 * trade.quantity;
+    return formatCurrency(pl);
+}
+
+function getLatentPLClass(trade) {
+    const sym = getOccSymbol(trade);
+    const currentPrice = livePrices[sym]?.price;
+    if (currentPrice === undefined || !trade.price) return '';
+    return (trade.price - currentPrice) >= 0 ? 'positive-text' : 'negative-text';
+}
+
 async function refreshPrices() {
     if(isUpdating.value) return;
     isUpdating.value = true;
@@ -605,6 +989,42 @@ async function refreshPrices() {
         // Rockets
         if (props.rocketsTrades.risk) props.rocketsTrades.risk.forEach(t => symbols.add(t.symbol));
         if (props.rocketsTrades.neutralized) props.rocketsTrades.neutralized.forEach(t => symbols.add(t.symbol));
+        // Wheel (Actions + Options)
+        if (props.strategyType === 'wheel' && props.wheelOptions) {
+            props.wheelOptions.forEach(t => {
+                symbols.add(t.symbol); // Underlying
+                const occ = getOccSymbol(t);
+                if (occ) symbols.add(occ); // Option Symbol
+            });
+        }
+
+        // PCS (Actions + Legs)
+        if (props.strategyType === 'pcs' && props.pcsTrades) {
+            props.pcsTrades.forEach(t => {
+                symbols.add(t.symbol); // Underlying
+                
+                // Put Legs
+                if (t.strike_short) {
+                    const occ = getOccSymbol({ ...t, strike: t.strike_short, type: 'put' });
+                    if (occ) symbols.add(occ);
+                }
+                if (t.strike_long) {
+                    const occ = getOccSymbol({ ...t, strike: t.strike_long, type: 'put' });
+                    if (occ) symbols.add(occ);
+                }
+
+                // Call Legs (Iron Condor)
+                if (t.item_call_short) {
+                    const occ = getOccSymbol({ ...t, strike: t.item_call_short, type: 'call' });
+                    if (occ) symbols.add(occ);
+                }
+                if (t.item_call_long) {
+                    const occ = getOccSymbol({ ...t, strike: t.item_call_long, type: 'call' });
+                    if (occ) symbols.add(occ);
+                }
+            });
+        }
+
         // Assigned
         if (props.assignedTrades) props.assignedTrades.forEach(t => symbols.add(t.symbol));
         
@@ -882,6 +1302,14 @@ h3 {
 }
 .badge.long { background: rgba(76, 175, 80, 0.2); color: #4caf50; }
 .badge.short { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+
+.actions-cell {
+    display: flex; /* Enforce flexbox */
+    flex-direction: row; /* Horizontal alignment */
+    align-items: center; /* Vertical center */
+    gap: 5px; /* Spacing between buttons */
+    white-space: nowrap; /* Prevent wrapping */
+}
 
 .action-btn {
     padding: 4px 8px;

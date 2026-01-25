@@ -43,14 +43,17 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
         String::new()
     };
 
-    // 3. Appel de l'API avec le crumb
-    let url = format!(
-        "https://query1.finance.yahoo.com/v7/finance/quote?symbols={}&crumb={}",
-        symbols.join(","),
-        crumb
-    );
-
-    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    // 3. Appel de l'API avec le crumb (Utilisation de .query pour l'encodage correct des URL)
+    let joined_symbols = symbols.join(",");
+    let resp = client
+        .get("https://query1.finance.yahoo.com/v7/finance/quote")
+        .query(&[
+            ("symbols", joined_symbols.as_str()),
+            ("crumb", crumb.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
         return Err(format!(
@@ -71,7 +74,10 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
                     .as_f64()
                     .or_else(|| item["postMarketPrice"].as_f64());
 
-                let change_percent = item["regularMarketChangePercent"].as_f64().unwrap_or(0.0);
+                let change_percent = match item["regularMarketChangePercent"].as_f64() {
+                    Some(v) => v,
+                    None => 0.0,
+                };
 
                 if let Some(p) = price {
                     map.insert(

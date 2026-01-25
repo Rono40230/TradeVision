@@ -15,7 +15,8 @@
         "title": "journal-rocket-trading",
         "width": 800,
         "height": 600,
-        "decorations": false
+        "decorations": false,
+        "maximized": true
       }
     ],
     "security": {

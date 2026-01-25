@@ -434,15 +434,17 @@ export function useRocketState() {
                 }
             }
             else if (strategyType.value === 'pcs') {
-                // Vertical Spread Risk = Width * 100 * Qty
+                // Vertical Spread Risk = (Width - Credit) * 100 * Qty
                 if (t.sub_strategy === 'ic') {
-                     // Iron Condor Risk = Max width of either side
+                     // Iron Condor Risk = Max width of either side - Total Credit
                      const widthPut = Math.abs((t.strike_short || 0) - (t.strike_long || 0));
                      const widthCall = Math.abs((t.strike_call_short || 0) - (t.strike_call_long || 0));
-                     used += Math.max(widthPut, widthCall) * 100 * t.quantity;
+                     const maxRiskPerContract = Math.max(widthPut, widthCall) - (t.price || 0);
+                     used += maxRiskPerContract * 100 * t.quantity;
                 } else {
                      const width = Math.abs((t.strike_short || 0) - (t.strike_long || 0));
-                     used += width * 100 * t.quantity;
+                     const maxRiskPerContract = width - (t.price || 0);
+                     used += maxRiskPerContract * 100 * t.quantity;
                 }
             }
             else if (strategyType.value === 'rockets') {
