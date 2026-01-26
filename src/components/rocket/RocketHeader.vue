@@ -15,11 +15,15 @@
       </div>
       <div class="mm-item">
         <span class="label">Cash Dispo</span>
-        <span class="value">{{ formatCurrency(displayedCapital - account.cash_used) }}</span>
+        <span class="value" :class="(displayedCapital - account.cash_used) >= 0 ? 'positive' : 'negative'">{{ formatCurrency(displayedCapital - account.cash_used) }}</span>
+      </div>
+      <div class="mm-item" v-if="strategyLabel === 'Put Credit Spread' || strategyLabel === 'Wheel' || strategyLabel === 'Rockets'">
+        <span class="label">P/L</span>
+        <span class="value" :class="plLatent >= 0 ? 'positive' : 'negative'">{{ formatCurrency(plLatent) }}</span>
       </div>
       <div class="mm-item" v-if="strategyLabel === 'Wheel'">
         <span class="label">Prime Attendue</span>
-        <span class="value">{{ formatCurrency(totalExpectedPremium) }}</span>
+        <span class="value highlight-blue">{{ formatCurrency(totalExpectedPremium) }}</span>
       </div>
     </div>
     
@@ -93,6 +97,14 @@ defineEmits(['open-settings']);
 
 .value.positive { color: #4caf50; }
 .value.negative { color: #f44336; }
+
+.value.highlight-blue {
+    background-color: #2196f3;
+    color: #fff;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 1.1rem;
+}
 
 .mm-calendar-horizontal {
     display: flex;

@@ -11,233 +11,37 @@
     </div>
 
     <!-- WHEEL Form -->
-    <div v-if="modelValue === 'wheel'" class="form-content">
-        <div class="sub-strategy" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <label><input type="radio" v-model="renteSubStrategy" value="put" /> Vente PUT</label>
-            <label><input type="radio" v-model="renteSubStrategy" value="put_long" /> Achat PUT</label>
+    <WheelEntryForm 
+        v-if="modelValue === 'wheel'"
+        v-model="form"
+        v-model:subStrategy="renteSubStrategy"
+        @submit="handleSubmit"
+    />
 
-            <label><input type="radio" v-model="renteSubStrategy" value="call" /> Vente CALL</label>
-            <label><input type="radio" v-model="renteSubStrategy" value="call_long" /> Achat CALL</label>
-        </div>
-        
-        <div class="sub-strategy" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <label><input type="radio" v-model="renteSubStrategy" value="hedge" /> Hedge Simple</label>
-            <label><input type="radio" v-model="renteSubStrategy" value="hedge_spread" /> Hedge Spread</label>
-        </div>
-
-        <div class="input-group">
-            <label>Symbole</label>
-            <input type="text" :value="form.symbol" @input="form.symbol = $event.target.value.toUpperCase()" placeholder="ex: SPY" class="input-field" />
-        </div>
-            <div class="input-group">
-            <label>Date Expiration</label>
-            <input type="date" v-model="form.expiry" class="input-field" />
-        </div>
-
-        <div v-if="['put', 'put_long', 'call', 'call_long'].includes(renteSubStrategy)" class="input-group">
-            <label>Taille de position (%)</label>
-            <select v-model.number="form.positionSizePct" class="input-field">
-                <option :value="5">5 %</option>
-                <option :value="10">10 %</option>
-                <option :value="15">15 %</option>
-            </select>
-        </div>
-
-        <div v-if="renteSubStrategy !== 'hedge_spread'" class="input-group">
-            <label>Strike</label>
-            <input type="number" v-model="form.strike" placeholder="350" class="input-field" />
-        </div>
-
-        <div v-if="renteSubStrategy === 'hedge_spread'" class="complex-legs">
-             <h4>Hedge (Spread)</h4>
-             <div class="input-group">
-                <label>Pente Protection (Achat Put)</label>
-                <input type="number" v-model="form.strikeLong" class="input-field" />
-            </div>
-             <div class="input-group">
-                <label>Pente Financement (Vente Put)</label>
-                <input type="number" v-model="form.strikeShort" class="input-field" />
-            </div>
-        </div>
-
-        <div class="input-group" v-if="renteSubStrategy !== 'hedge'">
-            <label>Rendement Brut (%)</label>
-            <input type="number" v-model="form.estimatedYield" placeholder="ex: 12.5" class="input-field" />
-        </div>
-
-            <div class="input-group">
-            <label>Prime / Prix</label>
-            <input type="number" v-model="form.price" placeholder="2.43" class="input-field" />
-        </div>
-        
-        <div class="input-group">
-            <label>Quantité (Contrats)</label>
-            <input 
-                type="number" 
-                v-model.number="form.quantity"
-                class="input-field" 
-            />
-        </div>
-        
-        <button type="button" 
-                class="submit-btn" 
-                @click="handleSubmit"
-        >
-            Enregistrer l'Ordre
-        </button>
-    </div>
-
-        <!-- PCS (Put Credit Spread) Form -->
-    <div v-if="modelValue === 'pcs'" class="form-content">
-        <div class="sub-strategy">
-            <label><input type="radio" v-model="croissanceSubStrategy" value="pcs" /> PCS (Standard)</label>
-            <label><input type="radio" v-model="croissanceSubStrategy" value="ic" /> Iron Condor</label>
-        </div>
-
-            <div class="input-group">
-            <label>Symbole</label>
-            <input type="text" :value="form.symbol" @input="form.symbol = $event.target.value.toUpperCase()" placeholder="ex: TESLA" class="input-field" />
-        </div>
-            <div class="input-group">
-            <label>Date Expiration</label>
-            <input type="date" v-model="form.expiry" class="input-field" />
-        </div>
-            
-            <!-- STANDARD PCS LEGS -->
-            <div v-if="croissanceSubStrategy === 'pcs'" class="complex-legs">
-            <h4>Jambes (Put Credit Spread)</h4>
-            <div class="input-group">
-                <label>Strike Short (Vente Put)</label>
-                <input type="number" v-model="form.strikeShort" class="input-field" />
-            </div>
-                <div class="input-group">
-                <label>Strike Long (Achat Put)</label>
-                <input type="number" v-model="form.strikeLong" class="input-field" />
-            </div>
-            </div>
-
-            <!-- IRON CONDOR LEGS -->
-            <div v-if="croissanceSubStrategy === 'ic'" class="complex-legs">
-            <h4>Jambes (Iron Condor)</h4>
-            <div class="flex-row">
-                <div class="input-group half">
-                    <label>Vente limite put</label>
-                    <input type="number" v-model="form.strikeShort" class="input-field" />
-                </div>
-                <div class="input-group half">
-                    <label>Achat limite put</label>
-                    <input type="number" v-model="form.strikeLong" class="input-field" />
-                </div>
-            </div>
-            <div class="flex-row">
-                <div class="input-group half">
-                    <label>Vente limite call</label>
-                    <input type="number" v-model="form.strikeCallShort" class="input-field" />
-                </div>
-                <div class="input-group half">
-                    <label>Achat limite call</label>
-                    <input type="number" v-model="form.strikeCallLong" class="input-field" />
-                </div>
-            </div>
-            </div>
-
-            <div class="input-group">
-            <label>Crédit Net H.M. (Négatif)</label>
-            <input type="number" v-model="form.price" placeholder="-1.50" class="input-field" step="0.01" />
-        </div>
-
-            <div class="input-group">
-            <label>Quantité</label>
-                <input 
-                type="number" 
-                v-model.number="form.quantity"
-                class="input-field"
-            />
-        </div>
-
-        <button type="button" class="submit-btn" @click="handleSubmit">Enregistrer l'Ordre</button>
-    </div>
+    <!-- PCS Form -->
+    <PcsEntryForm 
+        v-if="modelValue === 'pcs'"
+        v-model="form"
+        v-model:subStrategy="croissanceSubStrategy"
+        @submit="handleSubmit"
+    />
 
     <!-- ROCKETS Form -->
-    <div v-if="modelValue === 'rockets'" class="form-content">
-        <div class="input-group">
-            <label>Type d'actif</label>
-            <select v-model="form.assetType" class="input-field">
-                <option value="Action">Action</option>
-                <option value="ETF">ETF</option>
-                <option value="Crypto">Crypto</option>
-            </select>
-        </div>
-
-        <div class="input-group">
-            <label>Profil de Risque</label>
-            <select v-model="form.riskProfile" class="input-field">
-                <option value="Peu Risqué">Peu Risqué</option>
-                <option value="Neutre">Neutre</option>
-                <option value="Risqué">Risqué</option>
-            </select>
-        </div>
-
-        <div class="input-group">
-            <label>Broker</label>
-            <select v-model="form.broker" class="input-field">
-                <option value="IBKR">IBKR</option>
-                <option value="Binance">Binance</option>
-                <option value="Gate.io">Gate.io</option>
-            </select>
-        </div>
-
-        <div class="input-group">
-            <label>Symbole</label>
-            <input type="text" :value="form.symbol" @input="form.symbol = $event.target.value.toUpperCase()" placeholder="ex: BTCUSDT" class="input-field" />
-        </div>
-
-        <div class="sub-strategy" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-             <div class="input-group">
-                <label>Entrée Stop</label>
-                <input type="number" v-model.number="form.entryStop" class="input-field" step="any" />
-            </div>
-             <div class="input-group">
-                <label>Entrée Limit</label>
-                <input type="number" v-model.number="form.entryLimit" class="input-field" step="any" />
-            </div>
-        </div>
-
-        <div class="input-group">
-            <label>Invalidation</label>
-            <input type="number" v-model.number="form.stopLoss" class="input-field" step="any" placeholder="Prix Stop Loss" />
-        </div>
-
-        <div class="quantity-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-             <div class="input-group">
-                <label>Quantité</label>
-                 <input type="number" 
-                    v-model.number="form.quantity"
-                    class="input-field computed-field" 
-                    readonly
-                    step="any"
-                />
-                <small v-if="mmWarning" style="color: #ff9800; display: block; margin-top: 4px;">{{ mmWarning }}</small>
-            </div>
-             <div class="input-group">
-                <label>Montant Position</label>
-                 <input type="text" 
-                    :value="formatCurrency((form.entryStop || form.entryLimit || 0) * form.quantity)"
-                    class="input-field computed-field" 
-                    readonly
-                />
-            </div>
-        </div>
-
-        <button type="button" class="submit-btn" @click="handleSubmit">Enregistrer l'Ordre</button>
-    </div>
+    <RocketEntryForm 
+        v-if="modelValue === 'rockets'"
+        v-model="form"
+        :mmWarning="mmWarning"
+        @submit="handleSubmit"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watchEffect } from 'vue';
-import { initDB } from '../../utils/db.js';
-import { formatCurrency } from '../../utils/rocketUtils.js';
+import { ref, computed, watchEffect, watch } from 'vue';
+import { submitTradeToDB } from '../../utils/tradeSubmission.js';
+import WheelEntryForm from './WheelEntryForm.vue';
+import PcsEntryForm from './PcsEntryForm.vue';
+import RocketEntryForm from './RocketEntryForm.vue';
 
 const props = defineProps({
     modelValue: { type: String, required: true }, // strategyType
@@ -253,31 +57,18 @@ const errorMsg = ref('');
 const mmWarning = ref('');
 
 const form = ref({
-    symbol: '',
-    expiry: '',
-    assetType: 'Action',
-    riskProfile: 'Neutre', // Peu Risqué, Neutre, Risqué
-    broker: 'IBKR',
-    stopLoss: null,
-    entryStop: null,
-    entryLimit: null,
-    strike: null,
-    positionSizePct: 10,
-    estimatedYield: null,
-    strikeShort: null,
-    strikeLong: null,
-    strikeCallShort: null,
-    strikeCallLong: null,
-    price: null,
-    quantity: 1
+    symbol: '', expiry: '', assetType: 'Action', riskProfile: 'Neutre',
+    broker: 'IBKR', stopLoss: null, entryStop: null, entryLimit: null,
+    strike: null, positionSizePct: 10, estimatedYield: null,
+    strikeShort: null, strikeLong: null, strikeCallShort: null, strikeCallLong: null,
+    price: null, quantity: 1
 });
 
-// Helper to sync v-model strategyType
 function updateStrategy(val) {
     emit('update:modelValue', val);
 }
 
-// Logic Computation
+// Logic Computation kept in parent for now
 const computedQuantity = computed(() => {
     // WHEEL Logic
     if (props.modelValue === 'wheel' && renteSubStrategy.value === 'put') {
@@ -306,84 +97,57 @@ const computedQuantity = computed(() => {
              const widthPut = (form.value.strikeShort && form.value.strikeLong) ? Math.abs(form.value.strikeShort - form.value.strikeLong) : 0;
              const widthCall = (form.value.strikeCallShort && form.value.strikeCallLong) ? Math.abs(form.value.strikeCallShort - form.value.strikeCallLong) : 0;
              const maxWidth = Math.max(widthPut, widthCall);
-             if (maxWidth > 0) {
-                 return Math.floor(tradeBudget / (maxWidth * 100)) || 1;
-             }
+             if (maxWidth > 0) return Math.floor(tradeBudget / (maxWidth * 100)) || 1;
         }
         return 1;
     }
 
     // ROCKETS Logic
     if (props.modelValue === 'rockets') {
-        // Reset warning check in watchEffect or utilize side-effect here (bad practice but effective for UI message)
-        // Better to have mmWarning computed elsewhere, but let's try to keep it simple.
-        // We can't set side effects easily in computed without warnings. 
-        // Let's do the calculation here.
-        
         const capital = props.displayedCapital;
         const { assetType, riskProfile, entryStop, entryLimit, stopLoss } = form.value;
-        const entry = entryStop || entryLimit; // Prefer stop if both? Usually only one is set.
+        const entry = entryStop || entryLimit; 
         
         if (!capital || !entry || !stopLoss) return 0;
-
-        // 1. Determine Risk %
-        let riskPct = 0.01; // Default Neutre Action/Crypto
+        
+        let riskPct = 0.01; 
         if (assetType === 'ETF') {
-            if (riskProfile === 'Peu Risqué') riskPct = 0.02;     // 2%
-            else if (riskProfile === 'Neutre') riskPct = 0.03;    // 3%
-            else if (riskProfile === 'Risqué') riskPct = 0.04;    // 4%
+            if (riskProfile === 'Peu Risqué') riskPct = 0.02;     
+            else if (riskProfile === 'Neutre') riskPct = 0.03;    
+            else if (riskProfile === 'Risqué') riskPct = 0.04;    
         } else {
-             // Action / Crypto
-            if (riskProfile === 'Peu Risqué') riskPct = 0.005;    // 0.5%
-            else if (riskProfile === 'Neutre') riskPct = 0.01;    // 1%
-            else if (riskProfile === 'Risqué') riskPct = 0.02;    // 2%
+            if (riskProfile === 'Peu Risqué') riskPct = 0.005;    
+            else if (riskProfile === 'Neutre') riskPct = 0.01;    
+            else if (riskProfile === 'Risqué') riskPct = 0.02;    
         }
 
-        // 2. Risk Calculation
         const riskAmount = capital * riskPct;
         const riskPerShare = Math.abs(entry - stopLoss);
-        
         if (riskPerShare === 0) return 0;
 
         let rawQty = riskAmount / riskPerShare;
-
-        // 3. Max Allocation Check (5% of Capital)
         const maxAlloc = capital * 0.05;
         const maxQtyByAlloc = maxAlloc / entry;
 
         let finalQty = rawQty;
-        if (finalQty > maxQtyByAlloc) {
-            finalQty = maxQtyByAlloc;
-        }
+        if (finalQty > maxQtyByAlloc) finalQty = maxQtyByAlloc;
 
-        // Rounding
-        if (assetType === 'Crypto') {
-             finalQty = parseFloat(finalQty.toFixed(6));
-        } else {
-             finalQty = Math.floor(finalQty);
-        }
+        if (assetType === 'Crypto') finalQty = parseFloat(finalQty.toFixed(6));
+        else finalQty = Math.floor(finalQty);
         
         return Math.max(finalQty, 0);
     }
-
     return form.value.quantity;
 });
 
-const isQuantityComputed = computed(() => {
-    if (props.modelValue === 'wheel') {
-         // Only Sell PUT (Short Put) is computed automatically
-         return renteSubStrategy.value === 'put';
-    }
-    // PCS and ROCKETS are computed
-    return true; 
+watch(computedQuantity, (newVal) => {
+   const isQuantityComputed = (props.modelValue === 'wheel' && renteSubStrategy.value === 'put') || props.modelValue === 'pcs' || props.modelValue === 'rockets';
+   if (isQuantityComputed) {
+       form.value.quantity = newVal;
+   } 
 });
 
 watchEffect(() => {
-   if (isQuantityComputed.value) {
-       form.value.quantity = computedQuantity.value;
-   } 
-   
-   // MM Warning Logic (Rockets)
    if (props.modelValue === 'rockets') {
         mmWarning.value = '';
         const capital = props.displayedCapital;
@@ -391,230 +155,36 @@ watchEffect(() => {
         const entry = entryStop || entryLimit;
         
         if (capital && entry && stopLoss) {
-             let riskPct = 0.01;
-             if (assetType === 'ETF') {
-                if (riskProfile === 'Peu Risqué') riskPct = 0.02;     
-                else if (riskProfile === 'Neutre') riskPct = 0.03;    
-                else if (riskProfile === 'Risqué') riskPct = 0.04;    
-             } else {
-                if (riskProfile === 'Peu Risqué') riskPct = 0.005;    
-                else if (riskProfile === 'Neutre') riskPct = 0.01;    
-                else if (riskProfile === 'Risqué') riskPct = 0.02;    
+             const maxAlloc = capital * 0.05;
+             const maxQtyByAlloc = maxAlloc / entry;
+             if (form.value.quantity >= maxQtyByAlloc && maxQtyByAlloc > 0) {
+                 mmWarning.value = `Plafonné à 5% du capital (${maxAlloc.toFixed(0)} $)`;
              }
-             
-            const riskAmount = capital * riskPct;
-            const riskPerShare = Math.abs(entry - stopLoss);
-            
-            if (riskPerShare > 0) {
-                 const rawQty = riskAmount / riskPerShare; // Exact Quantity needed for risk
-                 const maxAlloc = capital * 0.05;
-                 const maxQtyByAlloc = maxAlloc / entry;
-                 
-                 // If the calculated risk-based quantity exceeds the 5% capital allocation cap
-                 if (rawQty > maxQtyByAlloc) {
-                     mmWarning.value = `Plafonné à 5% du capital (${maxAlloc.toFixed(0)} $)`;
-                 }
-            }
         }
    }
 });
 
 async function handleSubmit() {
     errorMsg.value = '';
-    if (!props.account || !props.account.id) {
-         errorMsg.value = "Compte non chargé. Veuillez réessayer.";
-         return;
-    }
-    if (!form.value.symbol) {
-        errorMsg.value = "Symbole requis.";
-        return;
-    }
+    if (!props.account || !props.account.id) { errorMsg.value = "Compte non chargé."; return; }
+    if (!form.value.symbol) { errorMsg.value = "Symbole requis."; return; }
     if ((props.modelValue === 'wheel' || props.modelValue === 'pcs') && !form.value.expiry) {
-        errorMsg.value = "Date d'expiration requise.";
-        return;
+        errorMsg.value = "Date d'expiration requise."; return;
     }
 
-    // Prepare Payload
     const payload = {
         strategy: props.modelValue,
-        subStrategy: (props.modelValue === 'wheel' ? renteSubStrategy.value : croissanceSubStrategy.value),
+        subStrategy: (props.modelValue === 'wheel' ? renteSubStrategy.value : (props.modelValue === 'pcs' ? croissanceSubStrategy.value : null)),
         form: { ...form.value },
         quantityToInsert: form.value.quantity 
     };
 
     try {
-        const db = await initDB();
-        const today = new Date().toISOString().split('T')[0];
-        const currentStrategy = payload.strategy;
-        const targetYield = payload.form.estimatedYield || 0;
-        const posSize = payload.form.positionSizePct || 0;
-        const qC = payload.quantityToInsert;
-        
-        // Determine initial status
-        let initialStatus = 'open';
-        if (currentStrategy === 'rockets') {
-             // If no execution price is set, it's a pending order
-             if (!payload.form.price) {
-                 initialStatus = 'pending';
-             }
-        }
-
-        // Trade Header
-        // We include Rocket fields in the main INSERT to ensure atomicity
-        const assetType = (currentStrategy === 'rockets') ? payload.form.assetType : null;
-        const broker = (currentStrategy === 'rockets') ? payload.form.broker : null;
-        const stopLoss = (currentStrategy === 'rockets') ? payload.form.stopLoss : null;
-        const entryStop = (currentStrategy === 'rockets') ? payload.form.entryStop : null;
-        const entryLimit = (currentStrategy === 'rockets') ? payload.form.entryLimit : null;
-
-        const result = await db.execute(
-            `INSERT INTO trades 
-            (account_id, date, open_date, symbol, strategy, sub_strategy, status, target_yield, position_size_pct, 
-             asset_type, broker, stop_loss, entry_stop, entry_limit, created_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-            [
-                props.account.id, today, today, payload.form.symbol.toUpperCase(), currentStrategy, payload.subStrategy, initialStatus, targetYield, posSize,
-                assetType, broker, stopLoss, entryStop, entryLimit
-            ]
-        );
-        const tradeId = result.lastInsertId;
-        let cashImpact = 0;
-
-        // --- WHEEL ---
-        if (currentStrategy === 'wheel') {
-            let type = 'put';
-            let side = 'short';
-            let impact = 0;
-
-            switch (payload.subStrategy) {
-                case 'put': // Vente PUT
-                    type = 'put'; side = 'short';
-                    impact = (payload.form.strike * 100 * qC);
-                    break;
-                case 'put_long': // Achat PUT
-                    type = 'put'; side = 'long';
-                    // Impact = Coût de l'option (Debit)
-                    impact = (Math.abs(payload.form.price) * 100 * qC);
-                    break;
-                case 'call': // Vente CALL
-                    type = 'call'; side = 'short';
-                    // Covered Call utilise les actions comme collatéral
-                    impact = 0;
-                    break;
-                case 'call_long': // Achat CALL
-                    type = 'call'; side = 'long';
-                    impact = (Math.abs(payload.form.price) * 100 * qC);
-                    break;
-                case 'hedge': 
-                    type = 'put'; side = 'long';
-                    impact = (Math.abs(payload.form.price) * 100 * qC);
-                    // Force Status to Open (Standard)
-                    break;
-                case 'hedge_spread':
-                    // HEDGE SPREAD: 2 legs (Long Put + Short Put)
-                    // Insert Long Put (We store the full Debit here for P&L tracking)
-                    await db.execute(
-                        `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                         VALUES (?, 'put', 'long', ?, ?, ?, ?, 'open')`,
-                         [tradeId, qC, payload.form.strikeLong, payload.form.expiry, Math.abs(payload.form.price)]
-                    );
-                    // Insert Short Put
-                    await db.execute(
-                        `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                         VALUES (?, 'put', 'short', ?, ?, ?, 0, 'open')`,
-                         [tradeId, qC, payload.form.strikeShort, payload.form.expiry]
-                    );
-                    
-                    impact = (Math.abs(payload.form.price) * 100 * qC);
-                    side = 'spread'; 
-                    break;
-            }
-
-            // CRITICAL FIX: Ensure 'hedge' subStrategy is saved correctly in the single leg insert
-            if (payload.subStrategy !== 'hedge_spread') {
-                // If it's a hedge simple, type is put, side is long
-                await db.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`,
-                    [tradeId, type, side, qC, payload.form.strike, payload.form.expiry, payload.form.price]
-                );
-            }
-            cashImpact = impact;
-        } 
-        // --- PCS ---
-        else if (currentStrategy === 'pcs') {
-            if (payload.subStrategy === 'pcs') {
-                await db.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                     VALUES (?, 'put', 'short', ?, ?, ?, ?, 'open')`,
-                    [tradeId, qC, payload.form.strikeShort, payload.form.expiry, payload.form.price]
-                );
-                await db.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                     VALUES (?, 'put', 'long', ?, ?, ?, 0, 'open')`,
-                    [tradeId, qC, payload.form.strikeLong, payload.form.expiry]
-                );
-                cashImpact = Math.abs(payload.form.strikeShort - payload.form.strikeLong) * 100 * qC;
-            }
-            else if (payload.subStrategy === 'ic') {
-                 // Put Side
-                 await db.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                     VALUES (?, 'put', 'short', ?, ?, ?, ?, 'open')`,
-                    [tradeId, qC, payload.form.strikeShort, payload.form.expiry, payload.form.price/2] 
-                );
-                await db.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                     VALUES (?, 'put', 'long', ?, ?, ?, 0, 'open')`,
-                    [tradeId, qC, payload.form.strikeLong, payload.form.expiry]
-                );
-                // Call Side
-                await db.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                     VALUES (?, 'call', 'short', ?, ?, ?, ?, 'open')`,
-                    [tradeId, qC, payload.form.strikeCallShort, payload.form.expiry, payload.form.price/2]
-                );
-                await db.execute(
-                    `INSERT INTO legs (trade_id, type, side, quantity, strike, expiration, open_price, status) 
-                     VALUES (?, 'call', 'long', ?, ?, ?, 0, 'open')`,
-                    [tradeId, qC, payload.form.strikeCallLong, payload.form.expiry]
-                );
-
-                const widthPut = Math.abs(payload.form.strikeShort - payload.form.strikeLong);
-                const widthCall = Math.abs(payload.form.strikeCallShort - payload.form.strikeCallLong);
-                cashImpact = Math.max(widthPut, widthCall) * 100 * qC;
-            }
-        }
-        // --- ROCKETS ---
-        else if (currentStrategy === 'rockets') {
-             // Fields already inserted in main INSERT
-
-             // If pending, price is 0 for now (or entry price if known but not executed).
-             // If open, price is execution price.
-             const legPrice = initialStatus === 'open' ? payload.form.price : 0;
-
-             await db.execute(
-                `INSERT INTO legs (trade_id, type, side, quantity, open_price, status) 
-                 VALUES (?, 'stock', 'long', ?, ?, ?)`,
-                [tradeId, qC, legPrice, initialStatus]
-            );
-            
-            if (initialStatus === 'open') {
-                cashImpact = payload.form.price * qC;
-            }
-        }
-
-        if (cashImpact > 0) {
-            await db.execute(`UPDATE accounts SET cash_used = cash_used + ? WHERE id = ?`, [cashImpact, props.account.id]);
-        }
-
+        await submitTradeToDB(payload, props.account.id);
         emit('trade-submitted');
-        
-        // Reset Logic
         resetForm();
-
     } catch(e) {
-        errorMsg.value = "Erreur lors de l'enregistrement: " + e.message;
+        errorMsg.value = "Erreur: " + e.message;
     }
 }
 
@@ -630,144 +200,21 @@ function resetForm() {
 
 <style scoped>
 .error-msg {
-    background: rgba(255, 0, 0, 0.1);
-    color: #ff6b6b;
-    padding: 0.5rem;
-    border-radius: 4px;
-    margin-bottom: 1rem;
-    font-size: 0.9rem;
-    border: 1px solid rgba(255, 0, 0, 0.2);
+    background: rgba(255, 0, 0, 0.1); color: #ff6b6b; padding: 0.5rem;
+    border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; border: 1px solid rgba(255, 0, 0, 0.2);
 }
-
-/* Entry Block */
 .entry-block {
-    width: 330px;
-    box-sizing: border-box;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 1.5rem 2rem; /* Reduced padding to ensure buttons fit */
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
+    width: 330px; box-sizing: border-box; background: var(--surface-color);
+    border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem 2rem;
+    display: flex; flex-direction: column; overflow-y: auto;
 }
-
 .strategy-nav {
-    display: flex;
-    margin-bottom: 1.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    overflow: hidden;
-    flex-shrink: 0; /* Prevent collapsing */
-    min-height: 40px; /* Force minimum height */
+    display: flex; margin-bottom: 1.5rem; border: 1px solid var(--border-color);
+    border-radius: 6px; overflow: hidden; flex-shrink: 0; min-height: 40px;
 }
-
 .strategy-nav button {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    padding: 0.8rem;
-    cursor: pointer;
-    font-weight: 500;
+    flex: 1; background: transparent; border: none; color: var(--text-muted);
+    padding: 0.8rem; cursor: pointer; font-weight: 500;
 }
-
-.strategy-nav button.active {
-    background: var(--accent-color);
-    color: white;
-}
-
-.sub-strategy {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-    background: rgba(255,255,255,0.03);
-    padding: 1rem;
-    border-radius: 6px;
-}
-
-.input-group {
-    margin-bottom: 1rem;
-}
-
-.input-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-}
-
-.input-field {
-    width: 100%;
-    background: var(--bg-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    padding: 0.8rem;
-    border-radius: 4px;
-    font-size: 1rem;
-    box-sizing: border-box;
-}
-
-.input-field:focus {
-    border-color: var(--accent-color);
-    outline: none;
-}
-
-select.input-field {
-    /* Enforce dark theme explicitly */
-    background-color: #1e1e1e !important;
-    color: #e0e0e0 !important;
-    border: 1px solid var(--border-color);
-    appearance: none; /* Remove OS default styling */
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    cursor: pointer;
-    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23e0e0e0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.7rem top 50%;
-    background-size: 0.65rem auto;
-    padding-right: 2rem; /* Make room for arrow */
-}
-
-/* Ensure options are also dark (for some browsers) */
-select.input-field option {
-    background-color: #1e1e1e;
-    color: #e0e0e0;
-}
-
-.submit-btn {
-    width: 100%;
-    background: var(--accent-color);
-    color: white;
-    border: none;
-    padding: 1rem;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 1rem;
-}
-
-.submit-btn:hover {
-    background: var(--accent-hover);
-}
-
-.read-only {
-    background-color: var(--surface-color-dim, #333); 
-    cursor: not-allowed;
-    color: var(--text-muted);
-}
-.complex-legs {
-    border: 1px dashed var(--border-color);
-    padding: 1rem;
-    border-radius: 6px;
-    margin-bottom: 1rem;
-}
-.flex-row {
-    display: flex;
-    gap: 1rem;
-}
-.input-group.half {
-    width: 50%;
-}
+.strategy-nav button.active { background: var(--accent-color); color: white; }
 </style>

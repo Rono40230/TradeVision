@@ -10,6 +10,7 @@
         :calendar-events="calendarEvents"
         :total-expected-premium="totalExpectedPremium"
         :total-assigned="totalAssigned"
+        :pl-latent="totalLatentPL"
         @open-settings="showSettings = true"
     />
 
@@ -34,6 +35,14 @@
         @activate="({tradeId, price, date}) => activateTrade(tradeId, price, date)"
         @neutralize="({tradeId, price, date, quantity}) => neutralizeTrade(tradeId, price, date, quantity)"
         @close="({tradeId, price, date}) => closeTrade(tradeId, price, date)"
+    />
+
+    <CoveredCallModal 
+        :visible="showCCModal"
+        :account="account"
+        :trade="ccTrade"
+        @close="showCCModal = false"
+        @refresh="handleCCRefresh"
     />
 
     <div class="main-layout">
@@ -65,6 +74,7 @@
                 @activate-rocket="openActivationModal"
                 @neutralize-rocket="openNeutralizationModal"
                 @close-rocket="openClosureModal"
+                @open-cc-modal="openCCModal"
             />
         </div>
     </div>
@@ -72,13 +82,15 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 import RocketHeader from './rocket/RocketHeader.vue';
 import TradeEntryForm from './rocket/TradeEntryForm.vue';
 import ActiveTradesList from './rocket/ActiveTradesList.vue';
 import RocketModals from './rocket/RocketModals.vue';
 import RocketActionModals from './rocket/RocketActionModals.vue';
+import CoveredCallModal from './rocket/CoveredCallModal.vue';
 import { useRocketState } from '../composables/useRocketState.js';
+import { useLivePrices } from '../composables/useLivePrices.js';
 
 const {
     account, strategyType, mmConfig,
@@ -93,7 +105,62 @@ const {
     activateTrade, neutralizeTrade, closeTrade
 } = useRocketState();
 
+const priceUtils = useLivePrices();
+
+const totalLatentPL = computed(() => {
+    let total = 0;
+
+    if (strategyType.value === 'pcs') {
+        // Calculation must match getSpreadPL logic in useLivePrices
+        activeTradesPcs.value.forEach(trade => {
+            const currentCost = priceUtils.getSpreadPrice(trade, true); // true -> raw value
+            if (currentCost !== null && trade.price !== undefined) {
+                 const pl = (trade.price - currentCost) * 100 * trade.quantity;
+                 total += pl;
+            }
+        });
+    } else if (strategyType.value === 'wheel') {
+        // 1. Options (Short Puts/Calls) - EXCLUDING ASSIGNMENTS as requested
+        wheelOptions.value.forEach(trade => {
+             // P/L = (Entry - Current) * 100 * Qty
+             // Need to get Option Price
+             const sym = priceUtils.getOccSymbol(trade);
+             if (sym && priceUtils.livePrices[sym]) {
+                 const currentPrice = priceUtils.livePrices[sym].price;
+                 const pl = (trade.price - currentPrice) * 100 * trade.quantity;
+                 total += pl;
+             }
+        });
+    } else if (strategyType.value === 'rockets') {
+        // 1. RISK Trades
+        const riskTrades = rocketsTrades.value.risk || [];
+        riskTrades.forEach(trade => {
+             const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
+             const entry = trade.entry_executed || trade.price || 0;
+             if (currentPrice) {
+                 const diff = (currentPrice - entry) * trade.quantity;
+                 total += diff;
+             }
+        });
+        
+        // 2. NEUTRALIZED Trades
+        const neutralized = rocketsTrades.value.neutralized || [];
+        neutralized.forEach(trade => {
+             const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
+             const entry = trade.entry_executed || trade.price || 0;
+             if (currentPrice) {
+                 const diff = (currentPrice - entry) * trade.quantity;
+                 total += diff;
+            }
+        });
+    }
+
+    return total;
+});
+
 const rocketActionModals = ref(null);
+const showCCModal = ref(false);
+const ccTrade = ref(null);
 
 function openActivationModal(trade) {
     if (rocketActionModals.value) rocketActionModals.value.openActivation(trade);
@@ -105,6 +172,16 @@ function openNeutralizationModal(trade) {
 
 function openClosureModal(trade) {
     if (rocketActionModals.value) rocketActionModals.value.openClosure(trade);
+}
+
+function openCCModal(trade) {
+    ccTrade.value = trade;
+    showCCModal.value = true;
+}
+
+function handleCCRefresh() {
+    showCCModal.value = false;
+    onTradeSubmitted();
 }
 
 // REMOVED LOCAL STATE AND HANDLERS (Moved to RocketActionModals)
@@ -159,17 +236,7 @@ onMounted(async () => {
 }
 
 .mm-status-badge {
-    padding: 0.4rem 1.2rem;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 700;
-    margin-right: 1.5rem;
-    color: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    /* Styles handled in RocketHeader provided globally or scoped within header */
 }
-.mm-status-badge.green { background-color: #4caf50; }
-.mm-status-badge.blue { background-color: #2196F3; }
-.mm-status-badge.red { background-color: #f44336; }
+
 </style>

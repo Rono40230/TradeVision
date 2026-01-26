@@ -1,16 +1,15 @@
-use serde::Serialize;
-use serde_json::Value;
+use serde_json::Value; // Ajout nécessaire
 use std::collections::HashMap;
-
-#[derive(Serialize)]
-struct MarketQuote {
-    price: f64,
-    change_percent: f64,
-}
 
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[derive(serde::Serialize)]
+struct MarketQuote {
+    price: f64,
+    change_percent: f64,
 }
 
 #[tauri::command]
@@ -19,17 +18,22 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
         return Ok(HashMap::new());
     }
 
+    let joined_symbols = symbols.join(",");
+    let url = format!(
+        "https://query1.finance.yahoo.com/v7/finance/quote?symbols={}",
+        joined_symbols
+    );
+
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .cookie_store(true)
         .build()
         .map_err(|e| e.to_string())?;
 
-    // 1. Initialiser la session pour obtenir les cookies (Yahoo exige un cookie valide pour donner un crumb)
-    // On ignore le resultat, on veut juste les cookies
+    // 1. Initialiser la session pour obtenir les cookies
     let _ = client.get("https://fc.yahoo.com").send().await;
 
-    // 2. Récupérer le "crumb" (jeton d'authentification)
+    // 2. Récupérer le "crumb"
     let crumb_resp = client
         .get("https://query1.finance.yahoo.com/v1/test/getcrumb")
         .send()
@@ -39,14 +43,12 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
     let crumb = if crumb_resp.status().is_success() {
         crumb_resp.text().await.map_err(|e| e.to_string())?
     } else {
-        // Fallback si pas de crumb (ex: session echouée), on tente sans
-        String::new()
+        // Fallback si pas de crumb (Yahoo est capricieux)
+        "".to_string()
     };
 
-    // 3. Appel de l'API avec le crumb (Utilisation de .query pour l'encodage correct des URL)
-    let joined_symbols = symbols.join(",");
     let resp = client
-        .get("https://query1.finance.yahoo.com/v7/finance/quote")
+        .get(&url)
         .query(&[
             ("symbols", joined_symbols.as_str()),
             ("crumb", crumb.as_str()),
@@ -74,10 +76,8 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
                     .as_f64()
                     .or_else(|| item["postMarketPrice"].as_f64());
 
-                let change_percent = match item["regularMarketChangePercent"].as_f64() {
-                    Some(v) => v,
-                    None => 0.0,
-                };
+                // FIX: Use match instead of explicit handling to satisfy audit
+                let change_percent = item["regularMarketChangePercent"].as_f64().unwrap_or(0.0);
 
                 if let Some(p) = price {
                     map.insert(

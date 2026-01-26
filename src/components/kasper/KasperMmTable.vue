@@ -22,10 +22,19 @@
                              {{ pair.pip_value }} $
                          </td>
                          <td>
-                             <input type="number" v-model.number="pair.sl_pips" step="1" @change="onUpdatePair(pair)">
+                             <input type="number" 
+                                :value="pair.sl_pips"
+                                @input="updateLocalPair(pair, 'sl_pips', $event.target.value)"
+                                @change="onUpdatePair(pair)"
+                             >
                          </td>
                          <td>
-                             <input type="number" v-model.number="pair.risk_pct" step="0.1" @change="onUpdatePair(pair)">%
+                             <input type="number" 
+                                :value="pair.risk_pct"
+                                @input="updateLocalPair(pair, 'risk_pct', $event.target.value)"
+                                step="0.1"
+                                @change="onUpdatePair(pair)"
+                             >%
                          </td>
                          <td class="calculated">
                              {{ calculateInvested(pair) }}
@@ -53,7 +62,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
-import { fetchPrices, formatForexSymbol } from '../../composables/useMarketData.js';
+import { calculatePipValues } from '../../composables/useMarketData.js';
 
 const props = defineProps({
     pairsConfig: Array,
@@ -80,59 +89,7 @@ onUnmounted(() => {
 async function updatePipValues() {
     isUpdating.value = true;
     try {
-        const symbolsToFetch = new Set();
-        
-        props.pairsConfig.forEach(p => {
-            const pair = p.symbol;
-            if(pair.length !== 6) return; // Ignore non-forex length
-            
-            const base = pair.substring(0, 3);
-            const quote = pair.substring(3, 6);
-            
-            symbolsToFetch.add(formatForexSymbol(pair)); // Pair itself
-            if(quote !== 'USD') {
-                symbolsToFetch.add(formatForexSymbol(`${quote}USD`));
-                symbolsToFetch.add(formatForexSymbol(`USD${quote}`));
-            }
-        });
-
-        const prices = await fetchPrices(Array.from(symbolsToFetch));
-        
-        // Calculate
-        props.pairsConfig.forEach(p => {
-            const pair = p.symbol;
-            if(pair.length !== 6) return;
-            
-            const quote = pair.substring(3, 6);
-            let val = 10; // Base for USD quote
-
-            if (quote !== 'USD') {
-                // Try QuoteUSD (note: prices is now object of objects {price, change_percent})
-                const qUsd = prices[`${quote}USD=X`];
-                if (qUsd && qUsd.price) {
-                    val = 10 * qUsd.price;
-                } else {
-                    // Try USDQuote (e.g. USDJPY)
-                    const usdQ = prices[`USD${quote}=X`] || prices[`${pair}=X`]; 
-                    if (usdQ && usdQ.price) {
-                        val = 10 / usdQ.price;
-                    }
-                }
-            }
-
-            // Correction Spéciale JPY (Pip = 0.01 au lieu de 0.0001)
-            // Donc la valeur doit être multipliée par 100
-            if (quote === 'JPY') {
-                val *= 100;
-            }
-            
-            // Update if changed signifcantly
-            if (val && Math.abs(p.pip_value - val) > 0.01) {
-                p.pip_value = parseFloat(val.toFixed(2));
-                onUpdatePair(p);
-            }
-        });
-
+        await calculatePipValues(props.pairsConfig, onUpdatePair);
     } catch (e) {
         // Log error suppressed for audit
     } finally {
@@ -160,8 +117,16 @@ function calculateInvested(pair) {
 function calculateLot(pair) {
     if (!props.currentCapital || !pair || pair.sl_pips === 0 || pair.pip_value === 0) return '0.00';
     const riskAmount = props.currentCapital * (pair.risk_pct / 100);
+    // Use floor to be safe/conservative on lot size? Standard is rounding.
+    // But if we want exact mirror of risk, we should standard round.
     const lot = riskAmount / (pair.sl_pips * pair.pip_value);
+    // NOTE: In MM table we typically round allowed lot down or nearest. 
+    // Here we display 2 decimals.
     return lot.toFixed(2);
+}
+
+function updateLocalPair(pair, field, value) {
+    pair[field] = parseFloat(value);
 }
 </script>
 

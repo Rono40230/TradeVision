@@ -35,3 +35,52 @@ export function formatForexSymbol(pair) {
     }
     return pair;
 }
+
+export async function calculatePipValues(pairsConfig, onUpdate) {
+    const symbolsToFetch = new Set();
+    
+    pairsConfig.forEach(p => {
+        const pair = p.symbol;
+        if(pair.length !== 6) return;
+        
+        const quote = pair.substring(3, 6);
+        
+        symbolsToFetch.add(formatForexSymbol(pair));
+        if(quote !== 'USD') {
+            symbolsToFetch.add(formatForexSymbol(`${quote}USD`));
+            symbolsToFetch.add(formatForexSymbol(`USD${quote}`));
+        }
+    });
+
+    const prices = await fetchPrices(Array.from(symbolsToFetch));
+    
+    // Calculate and Mutate
+    pairsConfig.forEach(p => {
+        const pair = p.symbol;
+        if(pair.length !== 6) return;
+        
+        const quote = pair.substring(3, 6);
+        let val = 10; 
+
+        if (quote !== 'USD') {
+            const qUsd = prices[`${quote}USD=X`];
+            if (qUsd && qUsd.price) {
+                val = 10 * qUsd.price;
+            } else {
+                const usdQ = prices[`USD${quote}=X`] || prices[`${pair}=X`]; 
+                if (usdQ && usdQ.price) {
+                    val = 10 / usdQ.price;
+                }
+            }
+        }
+
+        if (quote === 'JPY') {
+            val *= 100;
+        }
+        
+        if (val && Math.abs(p.pip_value - val) > 0.01) {
+            p.pip_value = parseFloat(val.toFixed(2));
+            if(onUpdate) onUpdate(p);
+        }
+    });
+}

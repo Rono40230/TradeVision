@@ -5,7 +5,7 @@
             <p v-if="pair">Voulez-vous vraiment retirer <b>{{ pair.symbol }}</b> de votre tableau MM ?</p>
             
             <div class="modal-actions">
-                <button @click="$emit('close')">Annuler</button>
+                <button class="cancel" @click="$emit('close')">Annuler</button>
                 <button class="danger" @click="$emit('confirm')">Supprimer</button>
             </div>
         </div>
@@ -40,6 +40,9 @@ defineEmits(['close', 'confirm']);
     margin-bottom: 1rem;
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; }
-.modal-actions button { background: transparent; border: 1px solid var(--border-color); color: var(--text-color); padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
-.modal-actions button.danger { background: #f44336; border-color: #f44336; color: white; }
+.modal-actions button { border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; color: white; }
+.modal-actions button.cancel { background: #2196F3; }
+.modal-actions button.cancel:hover { background: #1976D2; }
+.modal-actions button.danger { background: #f44336; }
+.modal-actions button.danger:hover { background: #d32f2f; }
 </style>

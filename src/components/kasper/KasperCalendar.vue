@@ -21,73 +21,23 @@
                   @mouseenter="onDayHover($event, day)"
                   @mouseleave="onDayLeave"
              >
-                <div class="day-header">
-                    <span class="day-number">{{ day.number }}</span>
-                    <!-- CAPITAL PROGRESSION LINE -->
-                     <span class="capital-progress" v-if="day.entry">
-                        <span :class="day.entry.profit_loss >= 0 ? 'text-green' : 'text-red'">
-                            {{ day.entry.profit_loss > 0 ? '+' : '' }}{{ formatCurrencySimple(day.entry.profit_loss) }}
-                        </span>
-                        <span class="arrow">→</span>
-                        {{ formatCurrencySimple(day.entry.endCapital) }}
-                     </span>
-                </div>
-                
-                <!-- TRADES TABLE (TRUNCATED IN GRID) -->
-                <!-- Renamed class to force style update -->
-                <div class="cal-day-trades" v-if="getDailyTrades(day.entry) && getDailyTrades(day.entry).length > 0">
-                    <table>
-                        <tbody>
-                            <tr v-for="(t, idx) in getDailyTrades(day.entry)" :key="idx">
-                                <td class="c-pair">{{ t.pair }}</td>
-                                <td class="c-type" :class="t.direction.toLowerCase()">{{ t.direction.toUpperCase() }}</td>
-                                <td class="c-risk">{{ t.riskDisplay }}</td>
-                                <td class="c-pl" :class="t.result >= 0 ? 'text-green' : 'text-red'">
-                                    {{ t.result > 0 ? '+' : ''}}{{ t.result }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <CalendarDayCell :day="day" :pairsConfig="pairsConfig" />
              </div>
         </div>
 
-        <!-- HOVER POPUP -->
-        <Teleport to="body">
-            <div v-if="hoveredDay && hasTrades(hoveredDay)" class="cal-hover-popup" :style="popupStyle">
-                <div class="popup-header">
-                    <span class="d-date">{{ formatDateLong(hoveredDay.dateStr) }}</span>
-                    <span class="d-total" :class="hoveredDay.entry.profit_loss >= 0 ? 'text-green' : 'text-red'">
-                        {{ hoveredDay.entry.profit_loss > 0 ? '+' : '' }}{{ formatCurrencySimple(hoveredDay.entry.profit_loss) }}
-                    </span>
-                </div>
-                <!-- FULL TABLE IN POPUP -->
-                <div class="popup-table">
-                    <table>
-                        <thead>
-                           <tr>
-                               <th>Paire</th><th>Type</th><th>Risque</th><th>P/L</th>
-                           </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="(t, idx) in getDailyTrades(hoveredDay.entry)" :key="idx">
-                                <td class="c-pair">{{ t.pair }}</td>
-                                <td class="c-type" :class="t.direction.toLowerCase()">{{ t.direction.toUpperCase() }}</td>
-                                <td class="c-risk">{{ t.riskDisplay }}</td>
-                                <td class="c-pl" :class="t.result >= 0 ? 'text-green' : 'text-red'">
-                                    {{ t.result > 0 ? '+' : ''}}{{ t.result }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </Teleport>
+        <KasperCalendarPopup 
+            v-if="hoveredDay && hasTrades(hoveredDay)"
+            :hoveredDay="hoveredDay"
+            :popupStyle="popupStyle"
+            :pairsConfig="pairsConfig"
+        />
     </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
+import CalendarDayCell from './CalendarDayCell.vue';
+import KasperCalendarPopup from './KasperCalendarPopup.vue';
 
 const props = defineProps({
     dailyEntries: { type: Array, default: () => [] },
@@ -189,51 +139,6 @@ function onDayHover(evt, day) {
 function onDayLeave() {
     hoveredDay.value = null;
 }
-/* --- END HOVER --- */
-
-function formatDateLong(dateStr) {
-    if(!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-}
-
-function formatCurrencySimple(val) {
-    const v = Number(val);
-    if (isNaN(v)) return '0$';
-    if (Number.isInteger(v)) return v + '$';
-    return v.toFixed(2) + '$'; 
-}
-
-const getDailyTrades = (entry) => {
-    if (!entry || !entry.details) return null;
-    try {
-        const trades = JSON.parse(entry.details);
-        if (!Array.isArray(trades)) return [];
-
-        return trades.map(t => {
-            let riskVal = 0; 
-            let riskPctString = '0%';
-            
-            const config = props.pairsConfig.find(p => p.symbol === t.pair);
-            if (config) {
-                riskVal = t.lot * config.pip_value * config.sl_pips;
-                if (entry.startCapital && entry.startCapital > 0) {
-                     const pct = (riskVal / entry.startCapital) * 100;
-                     const rounded = Math.round(pct * 2) / 2;
-                     riskPctString = (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + '%';
-                }
-            }
-            
-            return {
-                pair: t.pair,
-                direction: t.direction || 'Buy',
-                lot: t.lot,
-                result: t.result,
-                riskDisplay: riskPctString 
-            };
-        });
-    } catch (e) { return []; }
-};
 </script>
 
 <style scoped>
@@ -300,85 +205,4 @@ const getDailyTrades = (entry) => {
 
 .cal-day.has-profit { background: rgba(76, 175, 80, 0.05); }
 .cal-day.has-loss { background: rgba(244, 67, 54, 0.05); }
-
-.day-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 0.5rem;
-}
-
-.day-number { font-size: 0.9rem; color: var(--text-muted); font-weight: bold; }
-
-.capital-progress {
-    font-size: 0.75rem;
-    color: #aaa;
-    font-family: monospace;
-    background: rgba(0,0,0,0.3);
-    padding: 2px 6px;
-    border-radius: 4px;
-}
-.arrow { color: #555; margin: 0 4px; }
-
-/* RENAMED CLASS: cal-day-trades */
-.cal-day-trades {
-    flex: 1;
-    overflow: hidden !important; /* Force no scroll */
-}
-.cal-day-trades table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.7rem;
-}
-.cal-day-trades th, .popup-table th {
-    text-align: left;
-    color: #666;
-    font-weight: normal;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #333;
-}
-.cal-day-trades td, .popup-table td {
-    padding: 2px 0;
-    color: #ccc;
-    white-space: nowrap;
-}
-.c-pair { font-weight: bold; color: #ddd; max-width: 50px; overflow: hidden; text-overflow: ellipsis; }
-.c-type.buy { color: #81c784; }
-.c-type.sell { color: #e57373; }
-.c-risk { font-family: monospace; }
-.c-pl { font-weight: bold; text-align: right; }
-
-.text-green, .cal-day-trades td.text-green, .popup-table td.text-green { color: #81c784; }
-.text-red, .cal-day-trades td.text-red, .popup-table td.text-red { color: #e57373; }
-
-/* --- POPUP CSS --- */
-.cal-hover-popup {
-    position: fixed;
-    background: #1e1e24; /* Dark bg */
-    border: 1px solid #555;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-    border-radius: 8px;
-    z-index: 10000; /* Super high z-index */
-    padding: 1rem;
-    pointer-events: none; 
-    display: flex;
-    flex-direction: column;
-    min-width: 280px;
-}
-.popup-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.8rem;
-    border-bottom: 1px solid #333;
-    padding-bottom: 0.5rem;
-}
-.d-date { font-weight: bold; color: #fff; text-transform: capitalize; }
-.d-total { font-weight: bold; font-size: 1.1rem; }
-
-.popup-table table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem; 
-}
-.popup-table td { padding: 4px 0; }
 </style>

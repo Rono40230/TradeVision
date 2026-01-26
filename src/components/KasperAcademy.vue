@@ -83,7 +83,10 @@ onMounted(() => {
 });
 
 const realTimeCapital = computed(() => {
-    return (account.value ? account.value.capital : 0) + (metrics.value ? metrics.value.result : 0);
+    const cap = parseFloat(account.value?.capital) || 0;
+    const res = parseFloat(metrics.value?.result) || 0;
+    const total = cap + res;
+    return total > 0 ? total : 1; // Avoid division by zero
 });
 
 const baseRiskAmount = computed(() => {

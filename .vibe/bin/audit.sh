@@ -1,9 +1,9 @@
 #!/bin/bash
 # audit.sh - Validation Phase 2 (Le Grand Jury)
 
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0m'
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+NC="\033[0m"
 
 echo "⚖️  AUDIT VIBE - Démarrage..."
 
@@ -36,30 +36,14 @@ fi
 
 # 3. Vérifications statiques (Taille, Todo...)
 echo "📏 Vérification taille fichiers (règle 16)..."
-# Ajuster selon règle 16: <250 Vue, <300 Rust, <120 main.rs
-for file in src/**/*.vue src/*.vue; do
-    if [ -f "$file" ]; then
-        lines=$(wc -l < "$file")
-        if [ "$lines" -gt 250 ]; then
-            echo "❌ $file : $lines lignes (>250)"
-            ERRORS=$((ERRORS + 1))
-        else
-            echo "✅ $file : $lines lignes"
-        fi
-    fi
-done
-for file in src-tauri/src/*.rs; do
-    if [ -f "$file" ] && [[ "$file" != *"main.rs" ]]; then
-        lines=$(wc -l < "$file")
-        if [ "$lines" -gt 300 ]; then
-            echo "❌ $file : $lines lignes (>300)"
-            ERRORS=$((ERRORS + 1))
-        else
-            echo "✅ $file : $lines lignes"
-        fi
-    fi
-done
-# Main.rs
+
+# RÈGLE 16 :
+# - Services Rust : < 300 lignes
+# - Composants Vue : < 250 lignes
+# - Main.rs : < 120 lignes
+# - JS/TS (Services) : < 300 lignes (aligné sur Rust/Services)
+
+# Main.rs (Règle spécifique 120)
 if [ -f "src-tauri/src/main.rs" ]; then
     lines=$(wc -l < "src-tauri/src/main.rs")
     if [ "$lines" -gt 120 ]; then
@@ -69,6 +53,39 @@ if [ -f "src-tauri/src/main.rs" ]; then
         echo "✅ src-tauri/src/main.rs : $lines lignes"
     fi
 fi
+
+# Composants Vue (< 250)
+find src -name "*.vue" | while read file; do
+    lines=$(wc -l < "$file")
+    if [ "$lines" -gt 250 ]; then
+        echo "❌ $file : $lines lignes (>250)"
+        ERRORS=$((ERRORS + 1))
+    # else
+        # echo "✅ $file : $lines lignes"
+    fi
+done
+
+# Services Rust (< 300) - hors main.rs
+find src-tauri/src -name "*.rs" ! -name "main.rs" | while read file; do
+    lines=$(wc -l < "$file")
+    if [ "$lines" -gt 300 ]; then
+        echo "❌ $file : $lines lignes (>300)"
+        ERRORS=$((ERRORS + 1))
+    # else
+        # echo "✅ $file : $lines lignes"
+    fi
+done
+
+# Services JS/TS (< 300)
+find src -name "*.js" -o -name "*.ts" | while read file; do
+    lines=$(wc -l < "$file")
+    if [ "$lines" -gt 300 ]; then
+        echo "❌ $file : $lines lignes (>300)"
+        ERRORS=$((ERRORS + 1))
+    # else
+        # echo "✅ $file : $lines lignes"
+    fi
+done
 
 echo "🔍 Vérifications règles .clinerules..."
 
