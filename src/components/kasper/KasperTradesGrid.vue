@@ -16,7 +16,7 @@
              <select 
                 v-model="trade.pair" 
                 class="input-field input-pair text-center"
-                @change="onChange"
+                @change="onPairChange(trade)"
              >
                 <option value="" disabled selected>Choisir</option>
                 <option v-for="p in sortedPairs" :key="p.id" :value="p.symbol">
@@ -87,6 +87,18 @@ const sortedPairs = computed(() => {
 
 function onChange() {
     emit('update:totals'); // Signal parent to recalc global totals
+}
+
+function onPairChange(trade) {
+    if (trade.pair && props.pairsConfig) {
+        const config = props.pairsConfig.find(p => p.symbol === trade.pair);
+        if (config) {
+            // SNAPSHOT: Store current SL and Pip Value to freeze risk calculation
+            trade.snap_sl = config.sl_pips;
+            trade.snap_pip_value = config.pip_value;
+        }
+    }
+    onChange();
 }
 
 function addTradeRow() {

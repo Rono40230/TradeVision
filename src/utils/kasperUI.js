@@ -15,14 +15,20 @@ export function getDailyTrades(entry, pairsConfig) {
             let riskVal = 0; 
             let riskPctString = '0%';
             
-            const config = pairsConfig.find(p => p.symbol === t.pair);
-            if (config) {
-                riskVal = t.lot * config.pip_value * config.sl_pips;
-                if (entry.startCapital && entry.startCapital > 0) {
-                     const pct = (riskVal / entry.startCapital) * 100;
-                     const rounded = Math.round(pct * 2) / 2;
-                     riskPctString = (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + '%';
+            // USE SNAPSHOT IF AVAILABLE
+            if (t.snap_sl !== undefined && t.snap_pip_value !== undefined) {
+                riskVal = t.lot * t.snap_pip_value * t.snap_sl;
+            } else {
+                const config = pairsConfig.find(p => p.symbol === t.pair);
+                if (config) {
+                    riskVal = t.lot * config.pip_value * config.sl_pips;
                 }
+            }
+
+            if (entry.startCapital && entry.startCapital > 0 && riskVal > 0) {
+                    const pct = (riskVal / entry.startCapital) * 100;
+                    const rounded = Math.round(pct * 2) / 2;
+                    riskPctString = (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + '%';
             }
             
             return {
@@ -38,6 +44,12 @@ export function getDailyTrades(entry, pairsConfig) {
 
 export function getTradeRiskAmount(trade, pairsConfig) {
     if (!trade.pair || trade.lot <= 0) return 0;
+
+    // USE SNAPSHOT IF AVAILABLE
+    if (trade.snap_sl !== undefined && trade.snap_pip_value !== undefined) {
+        return trade.lot * trade.snap_pip_value * trade.snap_sl;
+    }
+
     const config = pairsConfig.find(p => p.symbol === trade.pair);
     if (config) {
          // Formula: Lot * PipValue * SL_pips

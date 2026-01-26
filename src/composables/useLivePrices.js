@@ -19,60 +19,86 @@ export function useLivePrices() {
         if(isUpdating.value) return;
         isUpdating.value = true;
         try {
-            const symbols = new Set();
-            
+            const symbolsToFetch = new Set();
+            // Map pour faire correspondre Symbole Technique (fetché) -> Symbole Utilisateur (affiché)
+            // ex: { 'WLD': 'WLDUSDT' } signifie "Pour afficher WLD, j'ai fetché WLDUSDT"
+            // ex: { 'AAPL': 'AAPL' }
+            const techToUserMap = new Map(); 
+
             tradesList.forEach(t => {
-                if(t.symbol) symbols.add(t.symbol);
+                let sym = t.symbol;
+                if(sym) {
+                    let fetchSym = sym;
+                    // AUTO-DETECT CRYPTO MISSING SUFFIX
+                    // Si Broker Binance/Bybit ou Asset Crypto, et pas de suffixe stable coin
+                    if ((t.asset_type === 'crypto' || t.broker === 'Binance' || t.broker === 'Bybit') && sym.length <= 5) {
+                         const upper = sym.toUpperCase();
+                         if (!upper.includes('USDT') && !upper.includes('BUSD') && !upper.includes('USD') && !upper.includes('EUR')) {
+                             fetchSym = upper + 'USDT';
+                         }
+                    }
+                    
+                    symbolsToFetch.add(fetchSym);
+                    // On stocke le lien inverse : Le résultat de 'fetchSym' devra alimenter 'sym'
+                    // Attention: Si plusieurs userSym pointent vers le même fetchSym, on écrasera (pas grave, c'est le même prix)
+                    // Mais ici on veut surtout pouvoir retrouver 'sym' depuis la réponse
+                    // Problème: la réponse est une map { 'WLDUSDT': {...} }
+                    // On veut remplir livePrices['WLD'] avec ça.
+                    // Donc on a besoin de savoir que 'WLD' -> 'WLDUSDT'
+                    techToUserMap.set(sym, fetchSym);
+                }
                 
                 // Wheel Options
                 if (t.strategy === 'wheel' && (t.type === 'put' || t.type === 'call')) {
                      const occ = getOccSymbol(t);
-                     if (occ) symbols.add(occ);
+                     if (occ) {
+                         symbolsToFetch.add(occ);
+                         techToUserMap.set(occ, occ);
+                     }
                 }
                 
                 // PCS/IC Legs
                 if (t.strategy === 'pcs') {
-                    addPcsLegs(t, symbols);
+                    addPcsLegs(t, symbolsToFetch, techToUserMap);
                 }
             });
 
-            if(symbols.size > 0) {
-                const prices = await fetchPrices(Array.from(symbols));
-                Object.assign(livePrices, prices);
+            if(symbolsToFetch.size > 0) {
+                const prices = await fetchPrices(Array.from(symbolsToFetch));
+                
+                // Dispatch results to livePrices using the map
+                // prices = { 'WLDUSDT': {price: 2}, 'AAPL': {price: 150} }
+                techToUserMap.forEach((techSym, userSym) => {
+                    if (prices[techSym]) {
+                        livePrices[userSym] = prices[techSym];
+                    }
+                });
             }
         } catch(e) { 
-            // Silent error
+            console.error(e);
         } finally {
             isUpdating.value = false;
         }
     }
 
-    function addPcsLegs(t, symbols) {
-        if (t.strike_short) {
-            const occ = getOccSymbol({ ...t, strike: t.strike_short, type: 'put' });
-            if (occ) symbols.add(occ);
-        }
-        if (t.strike_long) {
-            const occ = getOccSymbol({ ...t, strike: t.strike_long, type: 'put' });
-            if (occ) symbols.add(occ);
-        }
+    function addPcsLegs(t, symbols, map) {
+        // Helper to add leg symbol
+        const add = (config) => {
+            const occ = getOccSymbol(config);
+            if (occ) {
+                symbols.add(occ);
+                map.set(occ, occ);
+            }
+        };
+
+        if (t.strike_short) add({ ...t, strike: t.strike_short, type: 'put' });
+        if (t.strike_long) add({ ...t, strike: t.strike_long, type: 'put' });
+        
         if (t.sub_strategy === 'ic') {
-             if (t.item_call_short) {
-                const occ = getOccSymbol({ ...t, strike: t.item_call_short, type: 'call' });
-                if (occ) symbols.add(occ);
-             }
-             if (t.item_call_long) {
-                const occ = getOccSymbol({ ...t, strike: t.item_call_long, type: 'call' });
-                if (occ) symbols.add(occ);
-             }
-             if (t.strike_call_short) {
-                const occ = getOccSymbol({ ...t, strike: t.strike_call_short, type: 'call' });
-                if (occ) symbols.add(occ);
-             }
-             if (t.strike_call_long) {
-                const occ = getOccSymbol({ ...t, strike: t.strike_call_long, type: 'call' });
-                if (occ) symbols.add(occ);
-             }
+             if (t.item_call_short) add({ ...t, strike: t.item_call_short, type: 'call' });
+             if (t.item_call_long) add({ ...t, strike: t.item_call_long, type: 'call' });
+             if (t.strike_call_short) add({ ...t, strike: t.strike_call_short, type: 'call' });
+             if (t.strike_call_long) add({ ...t, strike: t.strike_call_long, type: 'call' });
         }
     }
 

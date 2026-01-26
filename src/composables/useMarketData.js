@@ -3,21 +3,80 @@ import { invoke } from '@tauri-apps/api/core';
 
 /**
  * Récupère les prix pour une liste de symboles.
- * @param {string[]} symbols - Liste des tickers (ex: ['AAPL', 'EURUSD=X'])
- * @returns {Promise<Object>} Map de { symbol: price }
+ * Tente d'abord Binance (API Public) puis fallback sur Yahoo (Tauri).
+ * @param {string[]} symbols - Liste des tickers (ex: ['BTCUSDT', 'EURUSD=X'])
+ * @returns {Promise<Object>} Map de { symbol: { price: number } }
  */
 export async function fetchPrices(symbols) {
     if(!symbols || symbols.length === 0) return {};
 
     // Deduplicate
     const uniqueSymbols = [...new Set(symbols)];
+    const prices = {};
+    const yahooSymbols = [];
 
-    try {
-        const prices = await invoke('fetch_market_quotes', { symbols: uniqueSymbols });
-        return prices;
-    } catch (e) {
-        return {};
+    // Séparer les requêtes Binance (Crypto) vs Yahoo (Stocks/Forex/Options)
+    // On considère comme "Crypto" ce qui ressemble à des paires USDT/USDC ou coins connus
+    // Convention Rocket: Crypto souvent en XXXUSDT
+    const cryptoSymbols = [];
+    
+    uniqueSymbols.forEach(s => {
+        // Détection simple: Contient USDT, USDC ou BTC/ETH... 
+        // Ou si l'utilisateur a entré "BTC/USD"
+        const clean = s.replace('/', '').toUpperCase();
+        if (clean.endsWith('USDT') || clean.endsWith('USDC') || clean.endsWith('BUSD')) {
+            cryptoSymbols.push(clean);
+        } else {
+            // Tout ce qui n'est pas explicitement crypto-like va vers Yahoo
+            yahooSymbols.push(s);
+        }
+    });
+
+    // 1. Fetch Binance Direct (HTTP REST)
+    if (cryptoSymbols.length > 0) {
+        try {
+            // Binance public ticker endpoint (24hr stats pour avoir le change_percent)
+            // https://api.binance.com/api/v3/ticker/24hr
+            const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+            if (response.ok) {
+                const data = await response.json();
+                // data est [{ symbol: 'BTCUSDT', lastPrice: '40000.00', priceChangePercent: '2.5' }, ...]
+                
+                cryptoSymbols.forEach(target => {
+                    const found = data.find(item => item.symbol === target);
+                    if (found) {
+                        const original = uniqueSymbols.find(u => u.replace('/', '').toUpperCase() === target);
+                        if (original) {
+                            prices[original] = { 
+                                price: parseFloat(found.lastPrice),
+                                change_percent: parseFloat(found.priceChangePercent)
+                            };
+                        }
+                    } else {
+                        // fallback Yahoo
+                        yahooSymbols.push(uniqueSymbols.find(u => u.replace('/', '').toUpperCase() === target));
+                    }
+                });
+            }
+        } catch (e) {
+            // En cas d'erreur réseau Binance, fallback tout sur Yahoo
+            uniqueSymbols.forEach(s => {
+                if(cryptoSymbols.some(c => s.includes(c))) yahooSymbols.push(s);
+            });
+        }
     }
+
+    // 2. Fetch Yahoo (Reste) via Backend Rust
+    if (yahooSymbols.length > 0) {
+        try {
+            const yPrices = await invoke('fetch_market_quotes', { symbols: yahooSymbols });
+            Object.assign(prices, yPrices);
+        } catch (e) {
+           // Silent
+        }
+    }
+
+    return prices;
 }
 
 /**

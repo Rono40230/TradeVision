@@ -98,7 +98,9 @@ while true; do
     echo -e "${BLUE}🔄 Sync...${NC}"
     
     # 1. AUTO-FIX (Plugins) avec gestion erreurs
-    if [ "$DEBUG_MODE" = false ]; then
+    if [ -f "debug.lock" ]; then
+        echo "🚧 Mode DEBUG actif : Auto-fix désactivé (fichier debug.lock présent)"
+    elif [ "$DEBUG_MODE" = false ]; then
         echo "🔧 Auto-fixing..."
         retry_command "\"$VIBE_ROOT/.vibe/plugins/rust/fix.sh\"" "Fix Rust" || log_warning "Fix Rust ignoré après échecs"
         retry_command "\"$VIBE_ROOT/.vibe/plugins/vue/fix.sh\"" "Fix Vue" || log_warning "Fix Vue ignoré après échecs"
@@ -117,6 +119,7 @@ while true; do
 
     # 2. RÈGLES UNIVERSELLES (Taille, Nommage, Sécurité)
     # Vérification taille fichiers (.clinerules règle 16)
+    FAIL=0
     echo "📏 Vérification taille fichiers..."
     MAX_VUE=250
     MAX_RUST=300
@@ -126,7 +129,7 @@ while true; do
         if [ -f "$file" ]; then
             lines=$(wc -l < "$file")
             if [ "$lines" -gt $MAX_VUE ]; then
-                log_error "Fichier $file : $lines lignes (> $MAX_VUE)"
+                log_error "Fichier $file : $lines lignes (> $MAX_VUE) - TROP GROS ! REFACTORISEZ"
                 SIZE_FAIL=1
             fi
         fi
@@ -135,7 +138,7 @@ while true; do
         if [ -f "$file" ] && [[ "$file" != *"main.rs" ]]; then
             lines=$(wc -l < "$file")
             if [ "$lines" -gt $MAX_RUST ]; then
-                log_error "Fichier $file : $lines lignes (> $MAX_RUST)"
+                log_error "Fichier $file : $lines lignes (> $MAX_RUST) - TROP GROS ! REFACTORISEZ"
                 SIZE_FAIL=1
             fi
         fi
@@ -143,12 +146,15 @@ while true; do
     if [ -f "src-tauri/src/main.rs" ]; then
         lines=$(wc -l < "src-tauri/src/main.rs")
         if [ "$lines" -gt $MAX_MAIN_RS ]; then
-            log_error "Fichier src-tauri/src/main.rs : $lines lignes (> $MAX_MAIN_RS)"
+            log_error "Fichier src-tauri/src/main.rs : $lines lignes (> $MAX_MAIN_RS) - TROP GROS ! REFACTORISEZ"
             SIZE_FAIL=1
         fi
     fi
     if [ $SIZE_FAIL -eq 0 ]; then
         log_success "Tailles fichiers OK"
+    else
+        FAIL=1
+        notify-send -u critical -t 0 "✂️ VibeOS - TAILLE CRITIQUE" "Un fichier dépasse la limite ! Refactorisez IMMÉDIATEMENT." 2>/dev/null
     fi
     
     # Vérification de sécurité critique avec gestion erreur
@@ -158,14 +164,26 @@ while true; do
     fi
 
     # 3. TESTS (Plugins) avec gestion erreurs
-    FAIL=0
-    if [[ "$STACK" == *"rust"* ]]; then
+    
+    # Détection des changements récents pour optimisation des tests
+    # On cherche les fichiers modifiés dans les dernières secondes
+    RS_CHANGED=$(find src-tauri -name "*.rs" -mmin -0.05 2>/dev/null | grep -v "target" | wc -l)
+    VUE_CHANGED=$(find src -name "*.vue" -o -name "*.ts" -o -name "*.js" -mmin -0.05 2>/dev/null | wc -l)
+    
+    # Si aucun changement détecté (cas polling ou premier run), on teste tout par sécurité
+    if [ "$RS_CHANGED" -eq 0 ] && [ "$VUE_CHANGED" -eq 0 ]; then
+        RS_CHANGED=1
+        VUE_CHANGED=1
+    fi
+
+    # NOTE: On ne reset pas FAIL ici, pour garder l'échec de la taille ou sécurité
+    if [[ "$STACK" == *"rust"* ]] && [ "$RS_CHANGED" -gt 0 ]; then
         if ! retry_command "\"$VIBE_ROOT/.vibe/plugins/rust/test.sh\"" "Tests Rust"; then 
             log_warning "Erreur dans tests Rust"
             FAIL=1
         fi
     fi
-    if [[ "$STACK" == *"vue"* ]]; then
+    if [[ "$STACK" == *"vue"* ]] && [ "$VUE_CHANGED" -gt 0 ]; then
         if ! retry_command "\"$VIBE_ROOT/.vibe/plugins/vue/test.sh\"" "Tests Vue"; then 
             log_warning "Erreur dans tests Vue"
             FAIL=1
@@ -228,6 +246,29 @@ while true; do
         --arg successes "$SUCCESSES" \
         --argjson plugins "$(echo "$STACK" | jq -R 'split(" ")')" \
         '{total_cycles: ($total | tonumber), last_cycle_time: ($last | tonumber), average_cycle_time: ($avg | tonumber), errors_count: ($errors | tonumber), success_count: ($successes | tonumber), plugins_used: $plugins}' > "$VIBE_ROOT/.vibe/metrics.json.tmp" && mv "$VIBE_ROOT/.vibe/metrics.json.tmp" "$VIBE_ROOT/.vibe/metrics.json"
+
+    # --- AMÉLIORATIONS SOLO (Feedback & Sauvegarde) ---
+    
+    # 1. Micro-Commits (WIP) sur succès (si et seulement si FAIL est 0)
+    if [ $FAIL -eq 0 ]; then
+        if [[ -n $(git status -s) ]]; then
+            echo -e "${YELLOW}💾 Sauvegarde automatique (WIP)...${NC}"
+            git add . >/dev/null 2>&1
+            git commit -m "VibeOS Auto-save: $(date '+%Y-%m-%d %H:%M:%S')" --no-verify >/dev/null 2>&1
+        fi
+    fi
+
+    # 2. Notifications Desktop
+    PREV_STATE_FILE="/tmp/vibe_prev_state_$(echo "$PWD" | md5sum | cut -d' ' -f1)" 
+    PREV_STATE="0"
+    if [ -f "$PREV_STATE_FILE" ]; then PREV_STATE=$(cat "$PREV_STATE_FILE"); fi
+    
+    if [ $FAIL -eq 0 ] && [ "$PREV_STATE" -ne 0 ]; then
+        notify-send -u normal -t 3000 "✅ VibeOS" "Le système est de nouveau stable." 2>/dev/null
+    elif [ $FAIL -ne 0 ] && [ "$PREV_STATE" -eq 0 ]; then
+        notify-send -u critical -t 5000 "❌ VibeOS" "Erreur détectée ! Vérifiez le terminal." 2>/dev/null
+    fi
+    echo "$FAIL" > "$PREV_STATE_FILE"
 
     # Pour inotify, pas de sleep, sinon sleep configurable
     if [ -z "$WATCH_CMD" ]; then

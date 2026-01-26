@@ -109,9 +109,9 @@ function addNewPair() {
 }
 
 function calculateInvested(pair) {
-    if (!props.currentCapital || !pair) return '0 $';
+    if (!props.currentCapital || !pair) return '0.0 $';
     const amount = props.currentCapital * (pair.risk_pct / 100);
-    return Math.ceil(amount) + ' $'; 
+    return amount.toFixed(1) + ' $'; 
 }
 
 function calculateLot(pair) {

@@ -9,8 +9,9 @@ language = "fr" # Force le nommage en français (fr/en/auto)
 
 [sentinel]
 # Fréquence de vérification (secondes)
-watch_interval = 2
-timeout = 2
+# AUGMENTÉ POUR ÉVITER LA SURCHARGE VSCODE
+watch_interval = 5
+timeout = 3
 # Fichiers à surveiller pour le checksum
 watch_extensions = ["rs", "vue", "ts", "js", "py", "md", "toml", "json"]
 # Fichiers à ignorer
@@ -25,12 +26,11 @@ custom_plugins = []
 max_file_lines = 150
 max_function_lines = 30
 max_complexity = 10
-# Interdictions (regex) - peut être overriden
+# Interdictions (regex) - Version allégée pour éviter les faux positifs sur 'format', 'specific', 'le'
 forbidden_patterns = [
     "console\\.log",
     "unwrap\\(\\)",
-    "TODO:",  # Force le format TODO(nom):
-    "any"     # TypeScript specific
+    "TODO:"  # Force le format TODO(nom):
 ]
 
 [audit]

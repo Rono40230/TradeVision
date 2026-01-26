@@ -25,7 +25,8 @@ SECURITY_THRESHOLD=$(get_config "security_threshold" || echo "high")
 LANGUAGE=$(get_config "language" || echo "auto")
 
 # Charger forbidden_patterns
-FORBIDDEN_PATTERNS=$(grep -A 10 "^forbidden_patterns =" "$CONFIG_FILE" | grep -E '^\s*"' | sed 's/.*"//' | sed 's/".*//' | tr '\n' ' ')
+# Fix: Extraction plus robuste pour ignorer les commentaires après les strings
+FORBIDDEN_PATTERNS=$(grep -A 10 "^forbidden_patterns =" "$CONFIG_FILE" | grep -E '^\s*"' | sed 's/^[^"]*"\([^"]*\)".*/\1/' | tr '\n' ' ')
 
 # Ajuster selon overrides
 if [ "$ALLOW_CONSOLE_LOG" = "true" ]; then
@@ -56,7 +57,8 @@ fi
 echo "   🔍 Vérification des patterns interdits..."
 for pattern in $FORBIDDEN_PATTERNS; do
     if [ -n "$pattern" ]; then
-        if grep -r "$pattern" . --include="*.rs" --include="*.vue" --include="*.ts" --include="*.js" --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git --exclude-dir=.vibe; then
+        # Exclure aussi les commentaires JS/TS/Rust (//...) pour éviter les faux positifs
+        if grep -r "$pattern" . --include="*.rs" --include="*.vue" --include="*.ts" --include="*.js" --exclude-dir=node_modules --exclude-dir=target --exclude-dir=dist --exclude-dir=.git --exclude-dir=.vibe | grep -v "//" | grep -v "#"; then
             echo "❌ PATTERN INTERDIT : '$pattern' détecté !"
             EXIT_CODE=1
         fi

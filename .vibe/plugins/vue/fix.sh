@@ -17,10 +17,11 @@ fi
 # 3. Vérifications .clinerules (règles surveillées par Sentinel)
 echo "🔍 Surveillance .clinerules pour Vue..."
 
-# Règle 10 : Supprimer console.log, debugger, alert
+# Règle 10 : Commenter console.log, debugger, alert (au lieu de supprimer)
 for file in src/**/*.vue src/*.vue; do
     if [ -f "$file" ]; then
-        sed -i '/console\.log(/d; /console\.error(/d; /console\.warn(/d; /console\.debug(/d; /debugger/d; /alert(/d' "$file"
+        # Commente les lignes contenant console.log, etc. si elles ne sont pas déjà commentées
+        sed -i -E 's/^(\s*)(console\.(log|error|warn|debug)\(|debugger|alert\()/\1\/\/ \2/' "$file"
     fi
 done
 

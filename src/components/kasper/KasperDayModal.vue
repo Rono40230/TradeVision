@@ -53,7 +53,10 @@ onMounted(() => {
                 pair: t.pair || '',
                 direction: t.direction || 'Buy',
                 lot: t.lot || 0.01,
-                result: t.result || 0
+                result: t.result || 0,
+                // Preserve snapshots
+                snap_sl: t.snap_sl,
+                snap_pip_value: t.snap_pip_value
             }));
         } catch(e) { trades = []; }
     }
