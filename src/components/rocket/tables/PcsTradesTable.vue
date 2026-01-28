@@ -123,6 +123,7 @@
             </template>
 
             <td class="actions-cell">
+                <button class="action-btn roll-btn" @click="$emit('roll-pcs', trade)" title="Rouler en CCS">Rouler</button>
                 <button class="action-btn close-btn" @click="$emit('update-status', trade, 'closed')">Fermer</button>
                 <button class="action-btn delete-btn" @click="$emit('delete', trade)" title="Supprimer">🗑️</button>
             </td>
@@ -140,7 +141,7 @@ const props = defineProps({
     viewMode: { type: String, default: 'journal' }
 });
 
-defineEmits(['update-status', 'update-date', 'delete']);
+defineEmits(['update-status', 'update-date', 'delete', 'roll-pcs']);
 
 const priceUtils = useLivePrices();
 </script>
@@ -165,6 +166,8 @@ const priceUtils = useLivePrices();
 
 .actions-cell { display: flex; flex-direction: row; align-items: center; gap: 5px; white-space: nowrap; }
 .action-btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.roll-btn { background: #ff9800; color: black; }
+.roll-btn:hover { background: #f57c00; }
 .close-btn { background: #f44336; color: white; }
 .close-btn:hover { background: #d32f2f; }
 .delete-btn { background: transparent; color: #999; border: 1px solid #444; font-size: 1rem; padding: 2px 6px; line-height: 1; }

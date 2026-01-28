@@ -1,7 +1,8 @@
 <template>
     <div class="pcs-entry-form">
         <div class="sub-strategy">
-            <label><input type="radio" v-model="localForm.subStrategy" value="pcs" @change="emitUpdate" /> PCS (Standard)</label>
+            <label><input type="radio" v-model="localForm.subStrategy" value="pcs" @change="emitUpdate" /> PCS (Put Spread)</label>
+            <label><input type="radio" v-model="localForm.subStrategy" value="ccs" @change="emitUpdate" /> CCS (Call Spread)</label>
             <label><input type="radio" v-model="localForm.subStrategy" value="ic" @change="emitUpdate" /> Iron Condor</label>
         </div>
 
@@ -25,6 +26,20 @@
                 <div class="input-group half">
                     <label>Achat limite put</label>
                     <input type="number" v-model="localForm.strikeLong" @input="emitUpdate" class="input-field" />
+                </div>
+            </div>
+        </div>
+
+        <!-- CCS LEGS -->
+        <div v-if="localForm.subStrategy === 'ccs'" class="complex-legs">
+            <div class="flex-row">
+                <div class="input-group half">
+                    <label>Vente limite call</label>
+                    <input type="number" v-model="localForm.strikeCallShort" @input="emitUpdate" class="input-field" />
+                </div>
+                <div class="input-group half">
+                    <label>Achat limite call</label>
+                    <input type="number" v-model="localForm.strikeCallLong" @input="emitUpdate" class="input-field" />
                 </div>
             </div>
         </div>

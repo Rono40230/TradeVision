@@ -16,6 +16,8 @@ const showStatusModal = ref(false);
 const pendingStatusUpdate = ref(null);
 const showDeleteModal = ref(false);
 const tradeToDelete = ref(null);
+const showCcsModal = ref(false);
+const tradeToRoll = ref(null);
 
 export const useRocketStore = () => {
     return {
@@ -33,6 +35,8 @@ export const useRocketStore = () => {
         showStatusModal,
         pendingStatusUpdate,
         showDeleteModal,
-        tradeToDelete
+        tradeToDelete,
+        showCcsModal,
+        tradeToRoll
     };
 };

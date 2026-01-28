@@ -1,15 +1,18 @@
 import { computed } from 'vue';
 import { useRocketStore } from './rocketStore.js';
 import { useRocketActions } from './rocketActions.js';
+import { useLivePrices } from './useLivePrices.js';
 
 export function useRocketState() {
     const store = useRocketStore();
     const actions = useRocketActions();
+    const priceUtils = useLivePrices();
 
     // Mapping State
     const { 
         db, account, plLatent, allActiveTrades, strategyType, mmConfig,
-        showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate, showDeleteModal, tradeToDelete 
+        showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate, showDeleteModal, tradeToDelete,
+        showCcsModal, tradeToRoll
     } = store;
 
     // --- COMPUTED PROPERTIES (Logic that relies on State) ---
@@ -95,8 +98,54 @@ export function useRocketState() {
     const strategyPL = computed(() => allActiveTrades.value.filter(t => t.strategy === strategyType.value && t.profit_loss).reduce((sum, t) => sum + t.profit_loss, 0));
 
     const totalAssigned = computed(() => (strategyType.value === 'wheel' ? wheelStocks.value.reduce((sum, t) => sum + ((t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity), 0) : 0));
+const totalLatentPL = computed(() => {
+        let total = 0;
 
-    // Calendar
+        if (strategyType.value === 'pcs') {
+            activeTradesPcs.value.forEach(trade => {
+                const currentCost = priceUtils.getSpreadPrice(trade, true); // true -> raw value
+                if (currentCost !== null && trade.price !== undefined) {
+                     const pl = (trade.price - currentCost) * 100 * trade.quantity;
+                     total += pl;
+                }
+            });
+        } else if (strategyType.value === 'wheel') {
+            wheelOptions.value.forEach(trade => {
+                 const sym = priceUtils.getOccSymbol(trade);
+                 if (sym && priceUtils.livePrices[sym]) {
+                     const currentPrice = priceUtils.livePrices[sym].price;
+                     const pl = (trade.price - currentPrice) * 100 * trade.quantity;
+                     total += pl;
+                 }
+            });
+        } else if (strategyType.value === 'rockets') {
+            const riskTrades = rocketsTrades.value.risk || [];
+            riskTrades.forEach(trade => {
+                 const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
+                 const entry = trade.entry_executed || trade.price || 0;
+                 if (currentPrice) {
+                     const diff = (currentPrice - entry) * trade.quantity;
+                     total += diff;
+                 }
+            });
+            
+            const neutralized = rocketsTrades.value.neutralized || [];
+            neutralized.forEach(trade => {
+                 const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
+                 const entry = trade.entry_executed || trade.price || 0;
+                 if (currentPrice) {
+                     const diff = (currentPrice - entry) * trade.quantity;
+                     total += diff;
+                }
+            });
+        }
+
+        return total;
+    });
+
+    
+    // Calendar,
+        totalLatentPL
     const calendarEvents = computed(() => {
         if (strategyType.value === 'rockets') return [];
         const events = [], now = new Date(); now.setHours(0,0,0,0);
@@ -134,6 +183,7 @@ export function useRocketState() {
         db, account, plLatent, allActiveTrades, strategyType, mmConfig,
         // Modals
         showSettings, showAssignModal, tradeToAssign, showStatusModal, pendingStatusUpdate, showDeleteModal, tradeToDelete,
+        showCcsModal, tradeToRoll,
         // Methods (Actions)
         ...actions,
         // Computed

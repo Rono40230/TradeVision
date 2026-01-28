@@ -51,6 +51,7 @@
                 @update-status="handleUpdateStatus"
                 @update-date="(t, d) => $emit('update-date', t, d)"
                 @delete="(t) => $emit('delete', t)"
+                @roll-pcs="(t) => $emit('roll-pcs', t)"
             />
 
             <!-- ROCKETS TABLES -->
