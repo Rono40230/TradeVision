@@ -8,6 +8,9 @@
             <button class="action-btn kasper-btn" @click="$emit('navigate', 'kasper-academy')">
                 <span>+</span> Journal Kasper
             </button>
+            <button class="action-btn import-btn" @click="$emit('navigate', 'import')">
+                <span>📥</span> Import IBKR
+            </button>
         </div>
         
         <h3 class="mt-4">Alertes</h3>
@@ -61,6 +64,18 @@ defineEmits(['navigate']);
 
 .rocket-btn { background: linear-gradient(90deg, #d32f2f 0%, #f44336 100%); }
 .kasper-btn { background: linear-gradient(90deg, #7b1fa2 0%, #9c27b0 100%); }
+
+.import-btn { 
+    background: #333; 
+    color: #a0a0a0; 
+    border: 1px dashed #555; 
+    margin-top: 0.5rem; 
+}
+.import-btn:hover { 
+    background: #444; 
+    color: white; 
+    border-color: #888; 
+}
 
 .alerts-list { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .alert-item { padding: 0.8rem; border-radius: 8px; font-size: 0.9rem; display: flex; gap: 0.5rem; align-items: center; }

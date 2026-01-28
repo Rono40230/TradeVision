@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from "vue";
 import { initDB } from "./utils/db.js";
 import DashboardView from "./views/DashboardView.vue";
+import ImportView from "./views/ImportView.vue";
 import RocketAcademy from "./components/RocketAcademy.vue";
 import KasperAcademy from "./components/KasperAcademy.vue";
 import AppTitlebar from "./components/AppTitlebar.vue";
@@ -26,6 +27,11 @@ onMounted(async () => {
             v-if="currentView === 'dashboard'" 
             :db="db" 
             @navigate="(view) => currentView = view"
+        />
+
+        <ImportView
+            v-else-if="currentView === 'import'"
+            @back="currentView = 'dashboard'"
         />
 
         <RocketAcademy v-else-if="currentView === 'rocket-academy'" />

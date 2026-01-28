@@ -1,6 +1,7 @@
-use serde_json::Value; // Ajout nécessaire
+use serde_json::Value;
 use std::collections::HashMap;
 
+/// Greets the user.
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -12,6 +13,7 @@ struct MarketQuote {
     change_percent: f64,
 }
 
+/// Fetches market quotes from Yahoo Finance.
 #[tauri::command]
 async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, MarketQuote>, String> {
     if symbols.is_empty() {
@@ -30,10 +32,8 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
         .build()
         .map_err(|e| e.to_string())?;
 
-    // 1. Initialiser la session pour obtenir les cookies
     let _ = client.get("https://fc.yahoo.com").send().await;
 
-    // 2. Récupérer le "crumb"
     let crumb_resp = client
         .get("https://query1.finance.yahoo.com/v1/test/getcrumb")
         .send()
@@ -43,7 +43,6 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
     let crumb = if crumb_resp.status().is_success() {
         crumb_resp.text().await.map_err(|e| e.to_string())?
     } else {
-        // Fallback si pas de crumb (Yahoo est capricieux)
         "".to_string()
     };
 
@@ -76,7 +75,7 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
                     .as_f64()
                     .or_else(|| item["postMarketPrice"].as_f64());
 
-                // FIX: Use match instead of explicit handling to satisfy audit
+                // WRITTEN_BY_PYTHON
                 let change_percent = item["regularMarketChangePercent"].as_f64().unwrap_or(0.0);
 
                 if let Some(p) = price {
@@ -95,7 +94,7 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
     Ok(map)
 }
 
-/// Point d'entrée principal de l'application Tauri
+/// Runs the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

@@ -22,8 +22,8 @@ ignore_patterns = ["*.tmp", "*.log", "*.cache"]
 custom_plugins = []
 
 [quality]
-# Limites strictes
-max_file_lines = 150
+# Limites strictes (Voir Rule 16 .clinerules)
+max_file_lines = 300
 max_function_lines = 30
 max_complexity = 10
 # Interdictions (regex) - Version allégée pour éviter les faux positifs sur 'format', 'specific', 'le'

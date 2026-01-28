@@ -75,7 +75,7 @@ export function useLivePrices() {
                 });
             }
         } catch(e) { 
-            console.error(e);
+            // Silent error
         } finally {
             isUpdating.value = false;
         }

@@ -41,11 +41,18 @@ export const metrics = computed(() => {
         }
     });
 
+    const daysInCurrentMonth = new Date(currentMonth.value.getFullYear(), currentMonth.value.getMonth() + 1, 0).getDate();
+    const startCap = account.value?.capital || 1;
+    const currentResult = totalPlus + totalMinus;
+    const totalPLPct = (currentResult / startCap) * 100;
+
     return {
         totalPlus,
         totalMinus,
-        result: totalPlus + totalMinus,
-        averageRisk: count > 0 ? totalRisk / count : 0,
+        result: currentResult,
+        averageRiskDaily: count > 0 ? totalRisk / count : 0,
+        averageRiskPerTrade: totalTrades > 0 ? totalRisk / totalTrades : 0,
+        dailyAvgPLPct: totalPLPct / daysInCurrentMonth,
         winrate: totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0
     };
 });

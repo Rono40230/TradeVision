@@ -19,8 +19,16 @@
             <span class="value">{{ formatCurrency(currentCapital) }}</span>
         </div>
         <div class="metric-group">
-            <span class="label">Risque Moyen</span>
-            <span class="value">{{ formatRiskPct(metrics?.averageRisk) }}</span>
+            <span class="label">Risque moy/Jour</span>
+            <span class="value">{{ formatRiskPct(metrics?.averageRiskDaily) }}</span>
+        </div>
+        <div class="metric-group">
+            <span class="label">Risque moy/Trade</span>
+            <span class="value">{{ formatRiskPct(metrics?.averageRiskPerTrade) }}</span>
+        </div>
+        <div class="metric-group" :class="(metrics?.dailyAvgPLPct || 0) >= 0 ? 'positive' : 'negative'">
+            <span class="label">P/L par Jour</span>
+            <span class="value">{{ formatSimplePct(metrics?.dailyAvgPLPct) }}</span>
         </div>
         <div class="metric-group">
             <span class="label">Winrate</span>
@@ -49,6 +57,7 @@ function formatCurrency(val) {
 }
 
 function formatRiskPct(val) {
+    if (!val) return '0 %';
     // val is dollars average risk
     const cap = props.account?.capital || 1;
     // Pct
@@ -57,6 +66,11 @@ function formatRiskPct(val) {
     const rounded = Math.round(pct * 2) / 2;
     // Remove .0 if integer
     return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + ' %';
+}
+
+function formatSimplePct(val) {
+    if (!val) return '0 %';
+    return val.toFixed(2) + ' %';
 }
 
 function formatWinrate(val) {
