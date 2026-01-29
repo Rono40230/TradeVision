@@ -96,6 +96,7 @@ import KasperSummaryCard from '../components/dashboard/kasper/KasperSummaryCard.
 import KasperAccountCard from '../components/dashboard/kasper/KasperAccountCard.vue';
 import RocketAlertsCard from '../components/dashboard/rocket/RocketAlertsCard.vue';
 import RocketStrategyCard from '../components/dashboard/rocket/RocketStrategyCard.vue';
+import RocketMmModal from '../components/dashboard/rocket/RocketMmModal.vue';
 import KasperMmTable from '../components/kasper/KasperMmTable.vue';
 import KasperProjections from '../components/kasper/KasperProjections.vue';
 
