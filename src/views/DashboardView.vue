@@ -106,6 +106,7 @@ const totalNetWorth = computed(() => rocketCapital.value + kasperCapital.value);
 // 2. Rocket Specifics
 const rocketActiveTrades = computed(() => rocket.allActiveTrades.value || []);
 const rocketActiveTradesCount = computed(() => rocketActiveTrades.value.length);
+const rocketGlobalPL = computed(() => rocket.globalLatentPL.value || 0);
 
 // 3. Kasper Specificsmetrics
 const kasperMetrics = computed(() => kasper.metrics.value || { result: 0, averageRisk: 0, winrate: 0 });
