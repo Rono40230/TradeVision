@@ -36,43 +36,46 @@
         </div>
     </div>
 
-    <!-- Main Metrics Row -->
-    <div class="metrics-row">
-        <!-- Trades Actifs (Always shown) -->
-        <div class="metric-item item-active">
-            <span class="lbl">Trades Actifs</span>
-            <span class="val">{{ activeCount }}</span>
-        </div>
+    <!-- Layout Row: Metrics + Advice -->
+    <div class="card-content-row">
+        <!-- Main Metrics Row -->
+        <div class="metrics-row">
+            <!-- Trades Actifs (Always shown) -->
+            <div class="metric-item item-active">
+                <span class="lbl">Trades Actifs</span>
+                <span class="val">{{ activeCount }}</span>
+            </div>
 
-        <!-- P/L In-Card (Rockets & PCS) -->
-        <div class="metric-item item-pl" v-if="strategy === 'rockets' || strategy === 'pcs'">
-             <span class="lbl">P/L Latent</span>
-             <span class="val" :class="localPlLatent >= 0 ? 'good-text' : 'warn-text'">{{ formatCurrency(localPlLatent) }}</span>
-        </div>
+            <!-- P/L In-Card (Rockets & PCS) -->
+            <div class="metric-item item-pl" v-if="strategy === 'rockets' || strategy === 'pcs'">
+                 <span class="lbl">P/L Latent</span>
+                 <span class="val" :class="localPlLatent >= 0 ? 'good-text' : 'warn-text'">{{ formatCurrency(localPlLatent) }}</span>
+            </div>
 
-        <!-- Prime Attendue (Wheel Only per RocketHeader) -->
-        <div class="metric-item item-premium" v-if="strategy === 'wheel'">
-            <span class="lbl">Prime Attendue</span>
-            <span class="val premium-badge">{{ formatCurrency(localExpectedPremium) }}</span>
+            <!-- Prime Attendue (Wheel Only per RocketHeader) -->
+            <div class="metric-item item-premium" v-if="strategy === 'wheel'">
+                <span class="lbl">Prime Attendue</span>
+                <span class="val premium-badge">{{ formatCurrency(localExpectedPremium) }}</span>
+            </div>
+            
+            <!-- Total des assignations (Wheel Only per RocketHeader) -->
+            <div class="metric-item item-assigned" v-if="strategy === 'wheel'">
+                 <span class="lbl">Total des assignations</span>
+                 <span class="val">{{ formatCurrency(localTotalAssigned) }}</span>
+            </div>
+
+            <!-- Cash Dispo (Always shown) -->
+            <div class="metric-item item-avail">
+                <span class="lbl">Cash Dispo</span>
+                <span class="val" :class="capitalAvailable >= 0 ? 'good-text' : 'warn-text'">{{ formatCurrency(capitalAvailable) }}</span>
+            </div>
         </div>
         
-        <!-- Total des assignations (Wheel Only per RocketHeader) -->
-        <div class="metric-item item-assigned" v-if="strategy === 'wheel'">
-             <span class="lbl">Total des assignations</span>
-             <span class="val">{{ formatCurrency(localTotalAssigned) }}</span>
+        <!-- Footer / Advice -->
+        <div class="coach-advice" :class="adviceStatus">
+            <span class="icon-bulb">💡</span>
+            <p>{{ adviceText }}</p>
         </div>
-
-        <!-- Cash Dispo (Always shown) -->
-        <div class="metric-item item-avail">
-            <span class="lbl">Cash Dispo</span>
-            <span class="val" :class="capitalAvailable >= 0 ? 'good-text' : 'warn-text'">{{ formatCurrency(capitalAvailable) }}</span>
-        </div>
-    </div>
-    
-    <!-- Footer / Advice -->
-    <div class="coach-advice" :class="adviceStatus">
-        <span class="icon-bulb">💡</span>
-        <p>{{ adviceText }}</p>
     </div>
   </div>
 </template>
