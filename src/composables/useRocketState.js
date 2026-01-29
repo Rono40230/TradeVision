@@ -130,11 +130,16 @@ const totalLatentPL = computed(() => {
             
             trades.forEach(trade => {
                  const pObj = prices[trade.symbol];
-                 if (pObj && pObj.price !== undefined) {
-                     const currentPrice = pObj.price;
-                     const entry = trade.entry_executed || trade.price || 0;
-                     const qty = trade.quantity || 0;
-                     const diff = (currentPrice - entry) * qty;
+                 const currentPrice = pObj?.price;
+                 
+                 // Strict check like in the table
+                 if (currentPrice !== undefined && currentPrice !== null) {
+                     // Force conversion to numbers
+                     const entry = Number(trade.entry_executed || trade.price || 0);
+                     const qty = Number(trade.quantity || 0);
+                     const cPrice = Number(currentPrice);
+                     
+                     const diff = (cPrice - entry) * qty;
                      total += diff;
                  }
             });
