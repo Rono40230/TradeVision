@@ -147,7 +147,8 @@ const adviceStatus = computed(() => {
 
 <style scoped>
 .rocket-strategy-card {
-    background: #1e1e24;
+    /* Base background fallback */
+    background: #1e1e24; 
     border: 1px solid rgba(255,255,255,0.08);
     display: flex;
     flex-direction: column;
@@ -155,6 +156,40 @@ const adviceStatus = computed(() => {
     padding: 0.75rem 1rem;
     position: relative;
     overflow: hidden;
+    border-radius: 8px; /* Standardize radius */
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+/* --- COLOR THEMES --- */
+/* Wheel: Green Pastel Tint */
+.rocket-strategy-card.theme-wheel {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.05));
+    border-color: rgba(76, 175, 80, 0.3);
+}
+.rocket-strategy-card.theme-wheel .card-header .title-group .icon,
+.rocket-strategy-card.theme-wheel .card-header h3 {
+    color: #81c784; /* Light Green Text */
+}
+
+/* PCS: Blue Pastel Tint */
+.rocket-strategy-card.theme-pcs {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.15), rgba(33, 150, 243, 0.05));
+    border-color: rgba(33, 150, 243, 0.3);
+}
+.rocket-strategy-card.theme-pcs .card-header .title-group .icon,
+.rocket-strategy-card.theme-pcs .card-header h3 {
+    color: #64b5f6; /* Light Blue Text */
+}
+
+/* Rockets: Purple Pastel Tint */
+.rocket-strategy-card.theme-rockets {
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.15), rgba(156, 39, 176, 0.05));
+    border-color: rgba(156, 39, 176, 0.3);
+}
+.rocket-strategy-card.theme-rockets .card-header .title-group .icon,
+.rocket-strategy-card.theme-rockets .card-header h3 {
+    color: #ba68c8; /* Light Purple Text */
+}
 }
 
 .card-header .header-top {
