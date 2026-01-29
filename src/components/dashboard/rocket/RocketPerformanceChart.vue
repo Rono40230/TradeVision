@@ -84,17 +84,24 @@ const renderChart = async () => {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                tooltip: {
+                tooltip: { 
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    titleColor: '#c0caf5',
+                    bodyColor: '#fff',
+                    borderColor: '#bb9af7', // Purple
+                    borderWidth: 1,
                     callbacks: {
-                        label: (c) => formatCurrency(c.raw),
-                        title: (c) => {
-                           if (!sorted[c[0].dataIndex]) return '';
-                           return new Date(sorted[c[0].dataIndex].date).toLocaleDateString('fr-FR', { dateStyle: 'full' });
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(context.parsed.y);
+                            }
+                            return label;
                         }
-                    },
-                    backgroundColor: '#1a1b26',
-                    borderColor: '#7aa2f7',
-                    borderWidth: 1
+                    }
                 }
             },
             scales: {
