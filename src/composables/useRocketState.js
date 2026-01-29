@@ -262,6 +262,6 @@ export function useRocketState() {
         currentActiveTrades, currentAssignedTrades, strategyLabel, calendarEvents,
         wheelStats, pcsStats, rocketsStats, mmStatusText, mmStatusColor, totalExpectedPremium,
         strategyCashUsed, strategyPL, totalAssigned,
-        totalLatentPL
+        totalLatentPL, globalLatentPL
     };
 }
