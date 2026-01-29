@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 import RocketHeader from './rocket/RocketHeader.vue';
 import TradeEntryForm from './rocket/TradeEntryForm.vue';
 import ActiveTradesList from './rocket/ActiveTradesList.vue';
