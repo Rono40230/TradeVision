@@ -100,8 +100,10 @@ export function useRocketState() {
     const totalAssigned = computed(() => (strategyType.value === 'wheel' ? wheelStocks.value.reduce((sum, t) => sum + ((t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity), 0) : 0));
 const totalLatentPL = computed(() => {
         let total = 0;
+        const sType = strategyType.value;
+        const prices = priceUtils.livePrices; // Direct access to reactive object
 
-        if (strategyType.value === 'pcs') {
+        if (sType === 'pcs') {
             activeTradesPcs.value.forEach(trade => {
                 const currentCost = priceUtils.getSpreadPrice(trade, true); // true -> raw value
                 if (currentCost !== null && trade.price !== undefined) {
@@ -109,34 +111,32 @@ const totalLatentPL = computed(() => {
                      total += pl;
                 }
             });
-        } else if (strategyType.value === 'wheel') {
+        } else if (sType === 'wheel') {
             wheelOptions.value.forEach(trade => {
                  const sym = priceUtils.getOccSymbol(trade);
-                 if (sym && priceUtils.livePrices[sym]) {
-                     const currentPrice = priceUtils.livePrices[sym].price;
+                 // Check proper symbol in prices
+                 if (sym && prices[sym] && prices[sym].price !== undefined) {
+                     const currentPrice = prices[sym].price;
                      const pl = (trade.price - currentPrice) * 100 * trade.quantity;
                      total += pl;
                  }
             });
-        } else if (strategyType.value === 'rockets') {
-            const riskTrades = rocketsTrades.value.risk || [];
-            riskTrades.forEach(trade => {
-                 const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
-                 const entry = trade.entry_executed || trade.price || 0;
-                 if (currentPrice) {
-                     const diff = (currentPrice - entry) * trade.quantity;
+        } else if (sType === 'rockets') {
+            // Filter direct from allActiveTrades to be sure
+            const trades = allActiveTrades.value.filter(t => 
+                t.strategy === 'rockets' && 
+                (t.status === 'open' || t.status === 'neutralized')
+            );
+            
+            trades.forEach(trade => {
+                 const pObj = prices[trade.symbol];
+                 if (pObj && pObj.price !== undefined) {
+                     const currentPrice = pObj.price;
+                     const entry = trade.entry_executed || trade.price || 0;
+                     const qty = trade.quantity || 0;
+                     const diff = (currentPrice - entry) * qty;
                      total += diff;
                  }
-            });
-            
-            const neutralized = rocketsTrades.value.neutralized || [];
-            neutralized.forEach(trade => {
-                 const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
-                 const entry = trade.entry_executed || trade.price || 0;
-                 if (currentPrice) {
-                     const diff = (currentPrice - entry) * trade.quantity;
-                     total += diff;
-                }
             });
         }
 
