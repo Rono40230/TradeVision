@@ -1,7 +1,7 @@
 
 import { computed } from 'vue';
 
-export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccount, allActiveTrades) {
+export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccount, allActiveTrades, livePrices, priceUtils) {
     
     // KASPER LOGIC
     const kasperEntriesByAccount = computed(() => {
