@@ -171,7 +171,8 @@ async function onSaveCapital(amount) {
     overflow-y: auto;
     padding: 1rem;
     gap: 1.5rem;
-    background-color: var(--bg-color);
+    /* Harmonization: Use Dashboard Colors */
+    background-color: var(--background-color, #121212);
 }
 
 .kasper-main-row {
