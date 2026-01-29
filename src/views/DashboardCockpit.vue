@@ -158,6 +158,15 @@ onMounted(async () => {
         if (kasperDb.value) {
             allKasperEntries.value = await kasperDb.value.select("SELECT * FROM kasper_daily_journal ORDER BY date ASC");
         }
+        if (rocketDb.value) {
+            // Fetch closed trades for Rockets strategy for the chart
+            // We need trades with strategy='rockets' and status='closed'
+            const q = `SELECT t.pl_realized, t.exit_date, t.profit_loss 
+                       FROM trades t 
+                       WHERE t.strategy = 'rockets' AND t.status = 'closed' 
+                       ORDER BY t.exit_date ASC`;
+            rocketClosedHistory.value = await rocketDb.value.select(q);
+        }
     } catch (e) { }
 });
 
