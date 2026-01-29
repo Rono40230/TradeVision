@@ -56,8 +56,15 @@
         </section>
     </div>
 
-    <!-- Placeholder Modals (To be implemented) -->
-    <div v-if="currentModal" class="modal-backdrop" @click.self="closeModal">
+    <!-- ROCKET MM MODAL (Has its own backdrop) -->
+    <RocketMmModal 
+        v-if="currentModal === 'rocket-mm'" 
+        :strategy="modalData" 
+        @close="closeModal" 
+    />
+
+    <!-- OTHER MODALS (Shared Backdrop) -->
+    <div v-if="currentModal && currentModal !== 'rocket-mm'" class="modal-backdrop" @click.self="closeModal">
         <!-- MODAL KASPER MM -->
         <div v-if="currentModal === 'kasper-mm'" class="modal-large">
             <header class="modal-header">
