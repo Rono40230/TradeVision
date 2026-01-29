@@ -61,7 +61,7 @@
 /* Zone Kasper (Left) */
 .zone-kasper {
     flex: 4; /* 40% width approx */
-    background-color: #1a1b26; /* Dark Blue Tint */
+    background-color: rgba(122, 162, 247, 0.05); /* Title color (Blue) very subdued */
     padding: 1.5rem;
     overflow-y: auto;
     border-right: 1px solid var(--border-color, #333);
