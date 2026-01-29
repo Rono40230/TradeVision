@@ -55,6 +55,8 @@
                     :strategy="strat"
                     :activeTrades="activeTradesByStrategy[strat] || []"
                     :stats="rocketStatsByStrategy[strat]"
+                    :totalAssigned="rocketStatsByStrategy[strat]?.totalAssigned || 0"
+                    :totalExpectedPremium="rocketStatsByStrategy[strat]?.totalExpectedPremium || 0"
                     @open-history="openModal('rocket-history-strat', strat)"
                     @open-mm="openModal('rocket-mm', strat)"
                 />
