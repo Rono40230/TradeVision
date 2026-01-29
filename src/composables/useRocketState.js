@@ -98,49 +98,38 @@ export function useRocketState() {
     // const strategyPL = computed(() => allActiveTrades.value.filter(t => t.strategy === strategyType.value && t.profit_loss).reduce((sum, t) => sum + t.profit_loss, 0));
 
     const totalAssigned = computed(() => (strategyType.value === 'wheel' ? wheelStocks.value.reduce((sum, t) => sum + ((t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity), 0) : 0));
-const rocketGlobalPL = computed(() => {
+const totalRocketPL = computed(() => {
+        // Nouvelle implémentation directe
         if (strategyType.value !== 'rockets') return 0;
         
-        let total = 0;
-        const prices = priceUtils.livePrices; // Reactive object
-        if (!prices) return 0;
+        let sum = 0;
+        const prices = priceUtils.livePrices; // Singleton Reactive
+        
+        // On parcourt TOUS les trades actifs (risk + neutralized)
+        const relevantTrades = allActiveTrades.value.filter(t => 
+            t.strategy === 'rockets' && 
+            (t.status === 'open' || t.status === 'neutralized')
+        );
 
-        // Force reactivity on the entire object for debugging/robustness (simple hack)
-        // Accessing keys ensures we track when new symbols are added
-        const _deps = Object.keys(prices).length; 
+        relevantTrades.forEach(t => {
+            // Logique identique à RocketRiskTable.vue
+            // 1. Récupération du prix
+            // On vérifie si l'objet existe dans livePrices
+            const priceObj = prices[t.symbol];
+            
+            // Si pas de prix, on compte 0 P/L pour ce trade (ou on garde le dernier P/L connu si stocké, mais ici on veut le live)
+            if (priceObj && priceObj.price !== undefined && priceObj.price !== null) {
+                const currentPrice = parseFloat(priceObj.price);
+                const entry = parseFloat(t.entry_executed || t.price || 0);
+                const qty = parseFloat(t.quantity || 0);
 
-        // 1. Risk Trades
-        const risk = allActiveTrades.value.filter(t => t.strategy === 'rockets' && t.status === 'open');
-        risk.forEach(t => {
-             const pObj = prices[t.symbol];
-             // Log only if needed, but for now just protect against NaN
-             if (pObj && pObj.price !== undefined && pObj.price !== null) {
-                  const entry = parseFloat(t.entry_executed || t.price || 0);
-                  const current = parseFloat(pObj.price);
-                  const qty = parseFloat(t.quantity || 0);
-                  
-                  if (!isNaN(entry) && !isNaN(current) && !isNaN(qty)) {
-                      total += (current - entry) * qty;
-                  }
-             }
+                if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
+                    sum += (currentPrice - entry) * qty;
+                }
+            }
         });
 
-        // 2. Neutralized Trades
-        const neutralized = allActiveTrades.value.filter(t => t.strategy === 'rockets' && t.status === 'neutralized');
-        neutralized.forEach(t => {
-             const pObj = prices[t.symbol];
-             if (pObj && pObj.price !== undefined && pObj.price !== null) {
-                  const entry = parseFloat(t.entry_executed || t.price || 0);
-                  const current = parseFloat(pObj.price);
-                  const qty = parseFloat(t.quantity || 0);
-                  
-                  if (!isNaN(entry) && !isNaN(current) && !isNaN(qty)) {
-                      total += (current - entry) * qty;
-                  }
-             }
-        });
-
-        return total;
+        return sum;
     });
 
     const totalLatentPL = computed(() => {
@@ -167,7 +156,7 @@ const rocketGlobalPL = computed(() => {
                  }
             });
         } else if (sType === 'rockets') {
-            return rocketGlobalPL.value;
+            return totalRocketPL.value;
         }
 
         return total;
