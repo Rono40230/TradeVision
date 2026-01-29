@@ -101,6 +101,10 @@ export function useRocketState() {
     const totalRocketPL = computed(() => { 
         // Force reactivity
         const _tick = priceUtils.lastUpdated.value; 
+        
+        // DEBUG LOGS START
+        console.log(`[RocketPL DEBUG] Recalculating... tick=${_tick}, strategy=${strategyType.value}`);
+
         if (strategyType.value !== 'rockets') return 0;
 
         let sum = 0;
@@ -110,19 +114,34 @@ export function useRocketState() {
         allActiveTrades.value.forEach(t => {
             if (t.strategy === 'rockets' && (t.status === 'open' || t.status === 'neutralized')) {
                 const sym = t.symbol;
+                const priceData = prices[sym];
+                
+                // Detailed log for each relevant trade
+                let logMsg = `[RocketPL DEBUG] Trade ${sym}: Entry=${t.entry_executed || t.price}, Qty=${t.quantity} | `;
+
                 // Check price existence
-                if (prices[sym] && prices[sym].price !== undefined) {
-                     const currentPrice = parseFloat(prices[sym].price);
+                if (priceData && priceData.price !== undefined) {
+                     const currentPrice = parseFloat(priceData.price);
                      const entry = parseFloat(t.entry_executed || t.price || 0);
                      const qty = parseFloat(t.quantity || 0);
+                    
+                     logMsg += `LivePrice=${currentPrice}`;
 
                      if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
-                         sum += (currentPrice - entry) * qty;
+                         const tradePL = (currentPrice - entry) * qty;
+                         sum += tradePL;
+                         logMsg += ` => Trade PL=${tradePL}`;
+                     } else {
+                         logMsg += ` => NaN values detected`;
                      }
+                } else {
+                    logMsg += `NO LIVE PRICE FOUND (keys: ${Object.keys(prices).join(',')})`;
                 }
+                console.log(logMsg);
             }
         });
 
+        console.log(`[RocketPL DEBUG] Final Sum = ${sum}`);
         return sum;
     });
 
