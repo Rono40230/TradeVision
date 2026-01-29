@@ -1,22 +1,30 @@
 <template>
   <div class="rocket-strategy-card bento-card">
     <div class="card-header">
-       <div class="title-group">
-           <span class="icon">{{ icon }}</span>
-           <h3>{{ title }}</h3>
-       </div>
-       <div class="pl-badges">
-           <span class="badge latent" :class="plLatent >= 0 ? 'green' : 'red'">
-               Latent: {{ formatCurrency(plLatent) }}
-           </span>
+       <div class="header-top">
+           <div class="title-group">
+               <span class="icon">{{ icon }}</span>
+               <h3>{{ title }}</h3>
+               <div class="strategy-actions">
+                    <button class="icon-btn-tiny" @click="$emit('open-history')" title="Historique">📜</button>
+                    <button class="icon-btn-tiny" @click="$emit('open-mm')" title="Règles MM">⚖️</button>
+               </div>
+           </div>
+           <div class="pl-badges">
+               <span class="badge latent" :class="plLatent >= 0 ? 'green' : 'red'">
+                   Latent: {{ formatCurrency(plLatent) }}
+               </span>
+           </div>
        </div>
     </div>
     
     <!-- Money Management Gauge -->
     <div class="mm-gauge-wrapper" :title="mmTooltip">
         <div class="mm-info">
-            <span class="label">Utilisation Capital (MM)</span>
-            <span class="val" :class="mmColorClass">{{ mmUsagePct }}%</span>
+            <span class="label">Capital Utilisé</span>
+            <span class="val" :class="mmColorClass">
+                {{ formatCurrency(stats?.capitalUsed) }} / {{ formatCurrency(stats?.capitalAllocated) }} ({{ mmUsagePct }}%)
+            </span>
         </div>
         <div class="progress-bar-bg">
             <div class="progress-bar-fill" 
@@ -28,14 +36,24 @@
     </div>
 
     <!-- Main Metrics -->
-    <div class="metrics-row">
-        <div class="metric">
+    <div class="metrics-grid">
+        <div class="metric-item">
             <span class="lbl">Trades Actifs</span>
-            <span class="val">{{ activeCount }}</span>
+            <span class="active-trades-val">{{ activeCount }}</span>
         </div>
-        <div class="metric">
+        <div class="metric-item">
             <span class="lbl">P/L Réalisé (YTD)</span>
             <span class="val" :class="plRealized >= 0 ? 'green' : 'red'">{{ formatCurrency(plRealized) }}</span>
+        </div>
+        <div class="metric-item">
+            <span class="lbl">Capital Alloué</span>
+            <span class="val">{{ formatCurrency(stats?.capitalAllocated) }}</span>
+        </div>
+        <div class="metric-item">
+            <span class="lbl">Capital Dispo</span>
+            <span class="val" :class="capitalAvailable >= 0 ? 'green' : 'orange'">
+                {{ formatCurrency(capitalAvailable) }}
+            </span>
         </div>
     </div>
 
@@ -43,18 +61,6 @@
     <div class="coach-advice" :class="adviceStatus">
         <span class="icon-bulb">💡</span>
         <p>{{ adviceText }}</p>
-    </div>
-
-    <!-- Actions Footer -->
-    <div class="card-footer">
-        <div class="buttons-group">
-            <button class="action-btn" @click="$emit('open-history')" title="Historique des trades">
-                📜 Historique
-            </button>
-            <button class="action-btn" @click="$emit('open-mm')" title="Règles Money Management">
-                ⚖️ Règles MM
-            </button>
-        </div>
     </div>
   </div>
 </template>
@@ -87,10 +93,6 @@ const icon = computed(() => config.value.icon);
 
 // DATA
 const plLatent = computed(() => {
-    // Sum of P/L of active trades (Need to fetch live prices usually, maybe passed in enriched activeTrades?)
-    // For now assuming activeTrades have a 'profit_loss' field if calculated, or we sum 0?
-    // In RocketState, plLatent is computed globally. We might pass it as a prop or sum it here if trade objects have it.
-    // Let's assume passed trades have it or we use 0.
     return props.activeTrades.reduce((sum, t) => sum + (t.latent_pl || 0), 0);
 });
 
@@ -99,102 +101,173 @@ const plRealized = computed(() => props.stats?.realizedPl || 0);
 
 // MM LOGIC
 const mmUsagePct = computed(() => {
-    if (!props.stats?.capitalAllocated) return 0;
-    return Math.round((props.stats.capitalUsed / props.stats.capitalAllocated) * 100);
+    const alloc = props.stats?.capitalAllocated || 1;
+    const used = props.stats?.capitalUsed || 0;
+    return Math.round((used / alloc) * 100);
 });
+const capitalAvailable = computed(() => (props.stats?.capitalAllocated || 0) - (props.stats?.capitalUsed || 0));
 
-const mmLimit = computed(() => 100); // 100% of allocation
-
+const mmLimit = computed(() => 90); // Hard limit 90%
 const mmColorClass = computed(() => {
-    if (mmUsagePct.value > 100) return 'bg-red';
-    if (mmUsagePct.value > 80) return 'bg-orange';
-    return 'bg-green';
-});
-
-const mmTooltip = computed(() => `${formatCurrency(props.stats?.capitalUsed)} utilisés sur ${formatCurrency(props.stats?.capitalAllocated)}`);
-
-// ADVICE LOGIC
-const adviceText = computed(() => {
-    if (mmUsagePct.value > 100) return "Attention : Capital alloué dépassé ! Réduisez l'exposition.";
-    if (mmUsagePct.value > 80) return "Zone de vigilance : Vous approchez de la limite d'allocation.";
-    if (activeCount.value === 0) return "Aucune position. Le capital dort.";
-    return "Allocation saine. Stratégie en cours.";
-});
-
-const adviceStatus = computed(() => {
-    if (mmUsagePct.value > 100) return 'danger';
-    if (mmUsagePct.value > 80) return 'warning';
+    if (mmUsagePct.value > 90) return 'critical';
+    if (mmUsagePct.value > 75) return 'warning';
     return 'good';
 });
 
+const mmTooltip = computed(() => `Utilisé: ${formatCurrency(props.stats?.capitalUsed)} / Alloué: ${formatCurrency(props.stats?.capitalAllocated)}`);
+
+// ADVICE LOGIC
+const adviceText = computed(() => {
+    if (mmUsagePct.value > 90) return "Attention : Exposition trop élevée ! Réduisez la taille.";
+    if (activeCount.value === 0) return "Aucune position active. C'est le moment de scanner !";
+    return "Positions sous contrôle. Surveillez les dates d'expiration.";
+});
+
+const adviceStatus = computed(() => {
+    if (mmUsagePct.value > 90) return 'danger';
+    if (activeCount.value === 0) return 'neutral';
+    return 'good';
+});
 </script>
 
 <style scoped>
 .rocket-strategy-card {
+    background: #1e1e24; /* Slightly lighter than zone bg */
+    border: 1px solid rgba(255,255,255,0.08);
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    background: rgba(30,30,30,0.6);
+    padding: 1rem;
+    /* Bento Card Base is global, but local overrides here */
 }
 
-.card-header {
+.card-header .header-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 0.5rem;
 }
-.title-group { display: flex; align-items: center; gap: 0.5rem; }
-.title-group h3 { margin: 0; font-size: 1rem; color: #eee; }
-.icon { font-size: 1.2rem; }
 
-.badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; font-family: monospace; }
-.badge.green { background: rgba(76, 175, 80, 0.2); color: #81c784; }
-.badge.red { background: rgba(244, 67, 54, 0.2); color: #e57373; }
-
-/* MM Gauge */
-.mm-gauge-wrapper { display: flex; flex-direction: column; gap: 4px; position: relative; }
-.mm-info { display: flex; justify-content: space-between; font-size: 0.7rem; color: #aaa; }
-.progress-bar-bg { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
-.progress-bar-fill { height: 100%; transition: width 0.5s ease; border-radius: 3px; }
-
-.bg-green { background-color: #4CAF50; color: #4CAF50; }
-.bg-orange { background-color: #FF9800; color: #FF9800; }
-.bg-red { background-color: #F44336; color: #F44336; }
-.progress-bar-fill.bg-green { background-color: #4CAF50; } /* Force bg color for div */
-.progress-bar-fill.bg-orange { background-color: #FF9800; }
-.progress-bar-fill.bg-red { background-color: #F44336; }
-
-
-.metrics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; text-align: center; }
-.metric { background: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 6px; }
-.metric .lbl { font-size: 0.7rem; color: #888; display: block; margin-bottom: 2px; }
-.metric .val { font-size: 0.9rem; font-weight: bold; color: #fff; }
-
-.coach-advice {
-    font-size: 0.8rem;
-    padding: 0.75rem;
-    background: rgba(255,255,255,0.05);
-    border-radius: 6px;
+.title-group {
     display: flex;
-    gap: 0.5rem;
     align-items: center;
+    gap: 0.5rem;
 }
-.coach-advice.danger { border-left: 3px solid #F44336; background: rgba(244,67,54,0.1); }
-.coach-advice.warning { border-left: 3px solid #FF9800; background: rgba(255,152,0,0.1); }
-.coach-advice.good { border-left: 3px solid #4CAF50; background: rgba(76,175,80,0.1); }
 
-.card-footer { margin-top: auto; }
-.buttons-group { display: flex; gap: 0.5rem; }
-.action-btn {
-    flex: 1;
-    background: transparent;
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #ccc;
-    padding: 0.4rem;
+.title-group h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #e0e0e0;
+}
+
+.strategy-actions {
+    display: flex;
+    gap: 0.25rem;
+    margin-left: 0.5rem;
+}
+
+.icon-btn-tiny {
+    background: rgba(255,255,255,0.1);
+    border: none;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 0.75rem;
+    font-size: 0.9rem;
+    padding: 2px 6px;
     transition: background 0.2s;
 }
-.action-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.icon-btn-tiny:hover { background: rgba(255,255,255,0.2); }
 
+.pl-badges .badge {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    background: rgba(255,255,255,0.1);
+}
+.badge.green { color: #4ade80; background: rgba(74, 222, 128, 0.1); }
+.badge.red { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+
+/* MM Gauge */
+.mm-gauge-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.mm-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+.progress-bar-bg {
+    height: 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+.progress-bar-fill {
+    height: 100%;
+    background: #4ade80;
+    transition: width 0.5s ease;
+}
+.progress-bar-fill.warning { background: #facc15; }
+.progress-bar-fill.critical { background: #f87171; }
+
+.limit-marker {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    width: 2px;
+    background: #f87171;
+    z-index: 2;
+}
+
+/* Metrics Grid */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    background: rgba(0,0,0,0.2);
+    padding: 0.75rem;
+    border-radius: 8px;
+}
+
+.metric-item {
+    display: flex;
+    flex-direction: column;
+}
+.metric-item .lbl {
+    font-size: 0.7rem;
+    opacity: 0.6;
+    text-transform: uppercase;
+}
+.metric-item .val {
+    font-size: 0.9rem;
+    font-weight: bold;
+    font-family: monospace;
+}
+.metric-item .val.green { color: #4ade80; }
+.metric-item .val.orange { color: #facc15; }
+.metric-item .val.red { color: #f87171; }
+.metric-item .active-trades-val { font-size: 0.9rem; font-weight: bold; font-family: monospace; }
+
+/* Coach Advice */
+.coach-advice {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    padding: 0.75rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+.coach-advice.danger { border-left: 2px solid #f87171; }
+.coach-advice.warning { border-left: 2px solid #facc15; }
+.coach-advice.good { border-left: 2px solid #4ade80; }
+.coach-advice.neutral { border-left: 2px solid #94a3b8; }
+
+.coach-advice .icon-bulb { font-size: 1.2rem; }
 </style>
