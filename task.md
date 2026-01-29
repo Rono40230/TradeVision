@@ -9,4 +9,6 @@
 ---
 
 ## 📋 Todo List
-- [ ] Initialiser la tâche...
+- [x] Initialiser la tâche...
+- [ ] Dashboard: Layout Rocket Academy Vertical
+  - Modifier `.rocket-grid` dans `dashboard-layout.css` pour empiler les stratégies.
