@@ -63,12 +63,25 @@ defineProps({
 
 .card-header h3 { margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; }
 
+.header-badges {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
 .badge {
     font-size: 0.8rem;
     padding: 0.2rem 0.6rem;
     border-radius: 20px;
     background: rgba(255,255,255,0.1);
 }
+
+.badge.pl-badge {
+    font-weight: bold;
+}
+.badge.pl-badge.green { color: #4caf50; background: rgba(76, 175, 80, 0.1); }
+.badge.pl-badge.red { color: #f44336; background: rgba(244, 67, 54, 0.1); }
+
 
 .rocket-zone .section-title {
     color: var(--text-muted);
