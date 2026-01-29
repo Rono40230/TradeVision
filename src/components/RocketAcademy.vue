@@ -1,5 +1,5 @@
 <template>
-  <div class="rocket-academy">
+  <div class="rocket-academy" :class="themeClass">
     <!-- 1. Money Management Block (Fixed Top) -->
     <RocketHeader 
         :account="{ ...account, cash_used: strategyCashUsed }"
