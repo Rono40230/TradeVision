@@ -75,7 +75,9 @@ async fn fetch_market_quotes(symbols: Vec<String>) -> Result<HashMap<String, Mar
                     .as_f64()
                     .or_else(|| item["postMarketPrice"].as_f64());
 
-                let change_percent = item["regularMarketChangePercent"].as_f64().unwrap_or(0.0);
+                let change_percent = item["regularMarketChangePercent"]
+                    .as_f64()
+                    .map_or(0.0, |v| v);
 
                 if let Some(p) = price {
                     map.insert(

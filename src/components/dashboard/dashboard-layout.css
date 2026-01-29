@@ -1,0 +1,160 @@
+/* Layout Global */
+.dashboard-cockpit {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--background-color, #121212);
+    color: var(--text-color, #e0e0e0);
+    overflow: hidden;
+}
+
+.cockpit-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden; /* Prevent global scroll, zones will scroll if needed */
+}
+
+/* Common Zone Styles */
+.zone-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.zone-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.subtitle {
+    font-size: 0.8rem;
+    opacity: 0.7;
+    display: block;
+}
+
+.mini-kpi {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+.mini-kpi .label { font-size: 0.7rem; opacity: 0.6; text-transform: uppercase; }
+.mini-kpi .value { font-weight: bold; font-family: monospace; }
+
+.icon-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 1.2rem;
+    margin-right: 1rem;
+    transition: background 0.2s;
+}
+.icon-btn:hover { background: rgba(255,255,255,0.1); }
+
+/* Zone Kasper (Left) */
+.zone-kasper {
+    flex: 4; /* 40% width approx */
+    background-color: #1a1b26; /* Dark Blue Tint */
+    padding: 1.5rem;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color, #333);
+}
+
+.zone-kasper .zone-header h2 { color: #7aa2f7; }
+
+/* Zone Rocket (Right) */
+.zone-rocket {
+    flex: 6; /* 60% width approx */
+    background-color: #161618; /* Dark Grey */
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.zone-rocket .zone-header h2 { color: #9ece6a; }
+
+/* Bento Cards Helpers */
+.kasper-grid, .rocket-grid {
+    display: grid;
+    gap: 1rem;
+}
+.rocket-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .cockpit-content {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .zone-kasper, .zone-rocket {
+        flex: none;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid #333;
+    }
+}
+
+.bento-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 1rem;
+}
+
+/* Modal Simple */
+.modal-backdrop {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex; justify-content: center; align-items: center; z-index: 9999;
+}
+.modal-simple {
+    background: #222; padding: 2rem; border-radius: 8px; border: 1px solid #444; color: #fff;
+    min-width: 300px;
+}
+
+.modal-large {
+    background: #1a1b26;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 1px solid #444;
+    color: #fff;
+    width: 90%;
+    max-width: 1200px;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.modal-header h3 { margin: 0; color: #7aa2f7; }
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 1.5rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-body {
+    flex: 1;
+    overflow-y: auto;
+}

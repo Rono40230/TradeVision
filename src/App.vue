@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
 import { initDB } from "./utils/db.js";
-import DashboardView from "./views/DashboardView.vue";
+import DashboardCockpit from "./views/DashboardCockpit.vue";
 import ImportView from "./views/ImportView.vue";
 import RocketAcademy from "./components/RocketAcademy.vue";
 import KasperAcademy from "./components/KasperAcademy.vue";
@@ -23,9 +23,8 @@ onMounted(async () => {
     
     <div class="app-container">
       <main class="main-content">
-        <DashboardView 
+        <DashboardCockpit 
             v-if="currentView === 'dashboard'" 
-            :db="db" 
             @navigate="(view) => currentView = view"
         />
 
