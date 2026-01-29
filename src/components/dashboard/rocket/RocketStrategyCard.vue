@@ -198,7 +198,6 @@ const adviceStatus = computed(() => {
 .rocket-strategy-card.theme-rockets .card-header h3 {
     color: #ba68c8; /* Light Purple Text */
 }
-}
 
 .card-header .header-top {
     display: flex;
