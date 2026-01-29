@@ -1,3 +1,7 @@
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::expect_used)]
+#![warn(clippy::panic)]
+
 use serde_json::Value;
 use std::collections::HashMap;
 
