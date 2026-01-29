@@ -323,6 +323,7 @@ const adviceStatus = computed(() => {
 
 /* Coach Advice */
 .coach-advice {
+    flex: 1; /* Advice takes remaining space */
     display: flex;
     gap: 0.75rem;
     align-items: center;
@@ -330,7 +331,9 @@ const adviceStatus = computed(() => {
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
     font-size: 0.8rem;
+    justify-content: center; /* Center content if short */
 }
+.coach-advice p { margin: 0; } /* Ensure P has no margin */
 .coach-advice.danger { border-left: 3px solid #f87171; }
 .coach-advice.warning { border-left: 3px solid #facc15; }
 .coach-advice.good { border-left: 3px solid #4ade80; }
