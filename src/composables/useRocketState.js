@@ -173,9 +173,9 @@ const rocketGlobalPL = computed(() => {
         return total;
     });
 
-    
+    const strategyPL = computed(() => totalLatentPL.value);
+
     // Calendar,
-        totalLatentPL
     const calendarEvents = computed(() => {
         if (strategyType.value === 'rockets') return [];
         const events = [], now = new Date(); now.setHours(0,0,0,0);
