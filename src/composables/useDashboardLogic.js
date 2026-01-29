@@ -33,20 +33,53 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
 
     const rocketStatsByStrategy = computed(() => {
         const stats = {
-            wheel: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_wheel || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
-            pcs: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_growth || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
-            rockets: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_rocket || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
+            wheel: { realizedPl: 0, capitalAllocated: 0, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
+            pcs: { realizedPl: 0, capitalAllocated: 0, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
+            rockets: { realizedPl: 0, capitalAllocated: 0, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
         };
+        
+        // 0. Capital Allocation (Include Margin for Wheel)
+        if (rocketAccount.value) {
+            // Wheel: Base + Margin
+            const wBase = rocketAccount.value.alloc_wheel || 0;
+            const wMargin = wBase * ((rocketAccount.value.margin_wheel_pct || 0) / 100);
+            stats.wheel.capitalAllocated = wBase + wMargin;
+            
+            stats.pcs.capitalAllocated = rocketAccount.value.alloc_growth || 0;
+            stats.rockets.capitalAllocated = rocketAccount.value.alloc_rocket || 0;
+        }
 
         if (allActiveTrades.value) {
             allActiveTrades.value.forEach(t => {
                 if (!stats[t.strategy]) return;
                 
+                // FILTER BY STATUS (Match useRocketState logic)
+                const isOpen = t.status === 'open';
+                const isPending = t.status === 'pending';
+                const isNeutralized = t.status === 'neutralized';
+                
+                // Wheel: Open or Pending (Stocks only if open for some logic, check useRocketState carefully)
+                // useRocketState: wheelOptions -> open/pending. wheelStocks -> open.
+                // PCS: open/pending.
+                // Rockets: open/pending/neutralized.
+                
+                let isValidForStats = false;
+                if (t.strategy === 'wheel') {
+                    if (t.type === 'stock') isValidForStats = isOpen; // Stock only counts if open (Assigned)
+                    else isValidForStats = isOpen || isPending;
+                } else if (t.strategy === 'pcs') {
+                    isValidForStats = isOpen || isPending;
+                } else if (t.strategy === 'rockets') {
+                    isValidForStats = isOpen || isPending || isNeutralized;
+                }
+                
+                if (!isValidForStats) return;
+
                 // 1. Capital Used Calculation
                 let used = 0;
                 if (t.strategy === 'wheel') {
                     if (t.type === 'put' && t.side === 'short') used = t.strike * 100 * t.quantity;
-                    else if (t.type === 'stock') used = (t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity; 
+                    else if (t.side === 'long' || t.type === 'stock') used = (t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity; 
                 } else if (t.strategy === 'pcs') {
                     if (t.sub_strategy === 'ic') {
                          const mw = Math.max(Math.abs((t.strike_short||0)-(t.strike_long||0)), Math.abs((t.strike_call_short||0)-(t.strike_call_long||0)));
@@ -91,7 +124,7 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
                              }
                          }
                     } else if (t.strategy === 'rockets' || (t.strategy === 'wheel' && t.type === 'stock')) {
-                        const sym = t.symbol; // For stocks
+                        const sym = t.symbol; 
                         const currentPrice = livePrices.value[sym]?.price;
                         const entry = t.entry_executed || t.price || 0;
                         if (currentPrice !== undefined) {
