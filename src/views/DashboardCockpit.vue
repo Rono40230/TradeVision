@@ -36,13 +36,6 @@
                 <div class="title-group">
                     <h2>ROCKET ACADEMY</h2>
                 </div>
-                <div class="zone-actions">
-                    <button class="icon-btn" title="Historique Global" @click="openModal('rocket-history')">📜</button>
-                    <div class="mini-kpi">
-                        <span class="label">Cash Dispo</span>
-                        <span class="value">{{ formatCurrency(rocketBuyingPower) }}</span>
-                    </div>
-                </div>
             </header>
 
             <!-- ALERT SYSTEM -->
