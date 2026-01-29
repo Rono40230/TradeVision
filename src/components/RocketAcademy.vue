@@ -109,6 +109,13 @@ function handleCCRefresh() {
     onTradeSubmitted(); // Refresh data
 }
 
+const themeClass = computed(() => {
+    if (strategyType.value === 'wheel') return 'theme-wheel';
+    if (strategyType.value === 'pcs') return 'theme-pcs';
+    if (strategyType.value === 'rockets') return 'theme-rockets';
+    return '';
+});
+
 onMounted(async () => {
     await init();
 });
