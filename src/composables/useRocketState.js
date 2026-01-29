@@ -175,6 +175,45 @@ export function useRocketState() {
         return total;
     });
 
+    const globalLatentPL = computed(() => {
+        // Force reactivity
+        const _tick = priceUtils.lastUpdated.value;
+        const prices = priceUtils.livePrices;
+        let total = 0;
+
+        // 1. PCS
+        allActiveTrades.value.filter(t => t.strategy === 'pcs' && (t.status === 'open' || t.status === 'pending')).forEach(trade => {
+             const currentCost = priceUtils.getSpreadPrice(trade, true); 
+             if (currentCost !== null && trade.price !== undefined) {
+                 total += (trade.price - currentCost) * 100 * trade.quantity;
+             }
+        });
+
+        // 2. Wheel (Options only - following existing logic)
+        allActiveTrades.value.filter(t => t.strategy === 'wheel' && t.type !== 'stock' && (t.status === 'open' || t.status === 'pending')).forEach(trade => {
+             const sym = priceUtils.getOccSymbol(trade);
+             if (sym && prices[sym] && prices[sym].price !== undefined) {
+                 total += (trade.price - prices[sym].price) * 100 * trade.quantity;
+             }
+        });
+
+        // 3. Rockets (Stocks/Crypto)
+        allActiveTrades.value.filter(t => t.strategy === 'rockets' && (t.status === 'open' || t.status === 'neutralized')).forEach(t => {
+            const sym = t.symbol;
+            const priceData = prices[sym];
+            if (priceData && priceData.price !== undefined) {
+                 const currentPrice = parseFloat(priceData.price);
+                 const entry = parseFloat(t.entry_executed || t.price || 0);
+                 const qty = parseFloat(t.quantity || 0);
+                 if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
+                     total += (currentPrice - entry) * qty;
+                 }
+            }
+        });
+
+        return total;
+    });
+
     const strategyPL = computed(() => totalLatentPL.value);
 
     // Calendar,
