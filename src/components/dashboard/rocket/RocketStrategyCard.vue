@@ -90,7 +90,7 @@ const config = computed(() => {
     switch(props.strategy) {
         case 'wheel': return { title: 'The Wheel', icon: '🎡' };
         case 'pcs': return { title: 'Put Credit Spreads', icon: '📉' };
-        case 'rockets': return { title: 'Rockets (Directionnel)', icon: '🚀' };
+        case 'rockets': return { title: 'Rockets', icon: '🚀' };
         default: return { title: props.strategy, icon: '❓' };
     }
 });
