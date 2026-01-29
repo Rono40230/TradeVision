@@ -30,15 +30,17 @@ const renderChart = async () => {
     let accumulated = invested;
     
     // Sort
-    const sorted = [...(props.entries || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+    const sorted = [...(props.entries || [])].sort((a,b) => new Date(a.date || a.exit_date) - new Date(b.date || b.exit_date));
     
     const labels = sorted.map(e => {
-        const d = new Date(e.date);
+        const d = new Date(e.date || e.exit_date);
         return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
     });
     
     const dataPoints = sorted.map(e => {
-        accumulated += (parseFloat(e.profit_loss) || 0);
+        // Rocket Strategy Trades can have 'pl_realized' or 'profit_loss'
+        const pl = parseFloat(e.pl_realized ?? e.profit_loss) || 0;
+        accumulated += pl;
         return accumulated;
     });
 
@@ -59,8 +61,8 @@ const renderChart = async () => {
             {
                 label: 'Solde',
                 data: dataPoints,
-                borderColor: '#7aa2f7',
-                backgroundColor: 'rgba(122, 162, 247, 0.1)',
+                borderColor: '#bb9af7', // Purple/Violet for Rockets
+                backgroundColor: 'rgba(187, 154, 247, 0.1)',
                 borderWidth: 2,
                 fill: true,
                 tension: 0.4,
@@ -70,10 +72,11 @@ const renderChart = async () => {
             {
                 label: 'Initial',
                 data: initCapLine,
-                borderColor: '#9ece6a', // Pastel Green
+                borderColor: '#565f89', // Muted Blue/Grey
                 borderWidth: 1,
                 pointRadius: 0,
-                fill: false
+                fill: false,
+                borderDash: [5, 5]
             }]
         },
         options: {
