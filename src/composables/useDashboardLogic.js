@@ -109,7 +109,8 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
 
                 // 4. Latent PL
                 let tempPL = 0;
-                if (livePrices && livePrices.value && priceUtils) {
+                // Treat livePrices as the Reactive object (no .value)
+                if (livePrices && priceUtils) {
                     if (t.strategy === 'pcs') {
                         const currentCost = priceUtils.getSpreadPrice(t, true);
                         if (currentCost !== null && t.price !== undefined) {
@@ -117,18 +118,22 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
                         }
                     } else if (t.strategy === 'wheel' && t.type !== 'stock') {
                          const sym = priceUtils.getOccSymbol(t);
-                         if (sym && livePrices.value[sym]) {
-                             const currentPrice = livePrices.value[sym].price;
+                         if (sym && livePrices[sym]) {
+                             const currentPrice = livePrices[sym].price;
                              if (currentPrice !== undefined) {
                                  tempPL = (t.price - currentPrice) * 100 * t.quantity;
                              }
                          }
                     } else if (t.strategy === 'rockets' || (t.strategy === 'wheel' && t.type === 'stock')) {
                         const sym = t.symbol; 
-                        const currentPrice = livePrices.value[sym]?.price;
-                        const entry = t.entry_executed || t.price || 0;
-                        if (currentPrice !== undefined) {
-                             tempPL = (currentPrice - entry) * t.quantity;
+                        const currentPrice = livePrices[sym]?.price;
+                        // Use string-safe parsing
+                        const entry = parseFloat(t.entry_executed || t.price || 0);
+                        const qty = parseFloat(t.quantity || 0);
+                        const curr = parseFloat(currentPrice);
+                        
+                        if (!isNaN(curr) && !isNaN(entry) && !isNaN(qty)) {
+                             tempPL = (curr - entry) * qty;
                         }
                     }
                 }
