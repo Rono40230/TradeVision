@@ -137,6 +137,10 @@ const rocketGlobalPL = computed(() => {
                   if (!isNaN(entry) && !isNaN(current) && !isNaN(qty)) {
                       total += (current - entry) * qty;
                   }
+             }
+        });
+
+        return total;
     });
 
     const totalLatentPL = computed(() => {
