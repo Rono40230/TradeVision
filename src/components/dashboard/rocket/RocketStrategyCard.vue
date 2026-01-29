@@ -12,7 +12,8 @@
            </div>
            
            <div class="header-status" v-if="strategy === 'wheel' || strategy === 'pcs' || strategy === 'rockets'">
-                <span class="badge latent" :class="localPlLatent >= 0 ? 'green' : 'red'">
+                <!-- Latent badge removed from header to favor metric row for rockets/pcs -->
+                <span class="badge latent" :class="localPlLatent >= 0 ? 'green' : 'red'" v-if="strategy === 'wheel'">
                    Latent: {{ formatCurrency(localPlLatent) }}
                </span>
            </div>
