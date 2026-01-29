@@ -98,10 +98,41 @@ export function useRocketState() {
     const strategyPL = computed(() => allActiveTrades.value.filter(t => t.strategy === strategyType.value && t.profit_loss).reduce((sum, t) => sum + t.profit_loss, 0));
 
     const totalAssigned = computed(() => (strategyType.value === 'wheel' ? wheelStocks.value.reduce((sum, t) => sum + ((t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity), 0) : 0));
-const totalLatentPL = computed(() => {
+const rocketGlobalPL = computed(() => {
+        if (strategyType.value !== 'rockets') return 0;
+        
+        let total = 0;
+        const prices = priceUtils.livePrices;
+        
+        // 1. Risk Trades
+        const risk = allActiveTrades.value.filter(t => t.strategy === 'rockets' && t.status === 'open');
+        risk.forEach(t => {
+             const pObj = prices[t.symbol];
+             if (pObj && pObj.price) {
+                  const entry = Number(t.entry_executed || t.price || 0);
+                  const current = Number(pObj.price);
+                  total += (current - entry) * Number(t.quantity);
+             }
+        });
+
+        // 2. Neutralized Trades
+        const neutralized = allActiveTrades.value.filter(t => t.strategy === 'rockets' && t.status === 'neutralized');
+        neutralized.forEach(t => {
+             const pObj = prices[t.symbol];
+             if (pObj && pObj.price) {
+                  const entry = Number(t.entry_executed || t.price || 0);
+                  const current = Number(pObj.price);
+                  total += (current - entry) * Number(t.quantity);
+             }
+        });
+
+        return total;
+    });
+
+    const totalLatentPL = computed(() => {
         let total = 0;
         const sType = strategyType.value;
-        const prices = priceUtils.livePrices; // Direct access to reactive object
+        const prices = priceUtils.livePrices; 
 
         if (sType === 'pcs') {
             activeTradesPcs.value.forEach(trade => {
@@ -122,27 +153,7 @@ const totalLatentPL = computed(() => {
                  }
             });
         } else if (sType === 'rockets') {
-            // Filter direct from allActiveTrades to be sure
-            const trades = allActiveTrades.value.filter(t => 
-                t.strategy === 'rockets' && 
-                (t.status === 'open' || t.status === 'neutralized')
-            );
-            
-            trades.forEach(trade => {
-                 const pObj = prices[trade.symbol];
-                 const currentPrice = pObj?.price;
-                 
-                 // Strict check like in the table
-                 if (currentPrice !== undefined && currentPrice !== null) {
-                     // Force conversion to numbers
-                     const entry = Number(trade.entry_executed || trade.price || 0);
-                     const qty = Number(trade.quantity || 0);
-                     const cPrice = Number(currentPrice);
-                     
-                     const diff = (cPrice - entry) * qty;
-                     total += diff;
-                 }
-            });
+            return rocketGlobalPL.value;
         }
 
         return total;
