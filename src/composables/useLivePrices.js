@@ -10,6 +10,7 @@ import {
 
 const livePrices = reactive({});
 const isUpdating = ref(false);
+const lastUpdated = ref(Date.now()); // Force reactivity trigger
 let refreshInterval = null;
 
 export function useLivePrices() {
