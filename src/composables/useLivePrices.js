@@ -79,6 +79,7 @@ export function useLivePrices() {
             // Silent error
         } finally {
             isUpdating.value = false;
+            lastUpdated.value = Date.now();
         }
     }
 
