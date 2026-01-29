@@ -20,6 +20,7 @@
             :activeTradesCount="rocketActiveTradesCount"
             :breakdown="breakdown"
             :activeTrades="rocketActiveTrades"
+            :plValue="rocketGlobalPL"
         />
 
         <!-- ZONE C: KASPER ACADEMY SUMMARY -->
