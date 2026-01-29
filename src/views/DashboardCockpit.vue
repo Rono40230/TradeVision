@@ -92,7 +92,6 @@
 
 <script setup>
 import { onMounted, computed, ref } from 'vue';
-import DashboardHeaderGlobal from '../components/dashboard/DashboardHeaderGlobal.vue';
 import KasperSummaryCard from '../components/dashboard/kasper/KasperSummaryCard.vue';
 import KasperAccountCard from '../components/dashboard/kasper/KasperAccountCard.vue';
 import RocketAlertsCard from '../components/dashboard/rocket/RocketAlertsCard.vue';
