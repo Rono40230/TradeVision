@@ -122,6 +122,7 @@ const {
 } = useKasperState();
 
 const allKasperEntries = ref([]);
+const rocketClosedHistory = ref([]);
 const currentModal = ref(null);
 const modalData = ref(null);
 
