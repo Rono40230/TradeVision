@@ -50,6 +50,7 @@
                     :stats="rocketStatsByStrategy[strat]"
                     :totalAssigned="rocketStatsByStrategy[strat]?.totalAssigned || 0"
                     :totalExpectedPremium="rocketStatsByStrategy[strat]?.totalExpectedPremium || 0"
+                    :history="strat === 'rockets' ? rocketClosedHistory : []"
                     @open-history="openModal('rocket-history-strat', strat)"
                     @open-mm="openModal('rocket-mm', strat)"
                 />
