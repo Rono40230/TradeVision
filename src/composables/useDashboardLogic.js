@@ -33,9 +33,9 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
 
     const rocketStatsByStrategy = computed(() => {
         const stats = {
-            wheel: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_wheel || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0 },
-            pcs: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_growth || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0 },
-            rockets: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_rocket || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0 },
+            wheel: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_wheel || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
+            pcs: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_growth || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
+            rockets: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_rocket || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0, plLatent: 0 },
         };
 
         if (allActiveTrades.value) {
@@ -66,7 +66,6 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
                 }
 
                 // 3. Expected Premium
-                // Filter out stocks, hedges
                 if (t.type !== 'stock' && t.sub_strategy !== 'hedge' && t.sub_strategy !== 'hedge_spread' && t.type !== 'spread') {
                      let premium = 0;
                      if (t.target_yield) premium = (t.strike * 100 * t.quantity) * (t.target_yield / 100);
@@ -74,6 +73,33 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
                      
                      stats[t.strategy].totalExpectedPremium += premium;
                 }
+
+                // 4. Latent PL
+                let tempPL = 0;
+                if (livePrices && livePrices.value && priceUtils) {
+                    if (t.strategy === 'pcs') {
+                        const currentCost = priceUtils.getSpreadPrice(t, true);
+                        if (currentCost !== null && t.price !== undefined) {
+                            tempPL = (t.price - currentCost) * 100 * t.quantity;
+                        }
+                    } else if (t.strategy === 'wheel' && t.type !== 'stock') {
+                         const sym = priceUtils.getOccSymbol(t);
+                         if (sym && livePrices.value[sym]) {
+                             const currentPrice = livePrices.value[sym].price;
+                             if (currentPrice !== undefined) {
+                                 tempPL = (t.price - currentPrice) * 100 * t.quantity;
+                             }
+                         }
+                    } else if (t.strategy === 'rockets' || (t.strategy === 'wheel' && t.type === 'stock')) {
+                        const sym = t.symbol; // For stocks
+                        const currentPrice = livePrices.value[sym]?.price;
+                        const entry = t.entry_executed || t.price || 0;
+                        if (currentPrice !== undefined) {
+                             tempPL = (currentPrice - entry) * t.quantity;
+                        }
+                    }
+                }
+                stats[t.strategy].plLatent += tempPL;
             });
         }
 
