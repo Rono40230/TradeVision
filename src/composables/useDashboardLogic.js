@@ -33,26 +33,47 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
 
     const rocketStatsByStrategy = computed(() => {
         const stats = {
-            wheel: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_wheel || 1, capitalUsed: 0 },
-            pcs: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_growth || 1, capitalUsed: 0 },
-            rockets: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_rocket || 1, capitalUsed: 0 },
+            wheel: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_wheel || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0 },
+            pcs: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_growth || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0 },
+            rockets: { realizedPl: 0, capitalAllocated: rocketAccount.value?.alloc_rocket || 1, capitalUsed: 0, totalAssigned: 0, totalExpectedPremium: 0 },
         };
 
         if (allActiveTrades.value) {
             allActiveTrades.value.forEach(t => {
                 if (!stats[t.strategy]) return;
-                let used = 0;
                 
+                // 1. Capital Used Calculation
+                let used = 0;
                 if (t.strategy === 'wheel') {
                     if (t.type === 'put' && t.side === 'short') used = t.strike * 100 * t.quantity;
                     else if (t.type === 'stock') used = (t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity; 
                 } else if (t.strategy === 'pcs') {
-                    used = (Math.abs((t.strike_short || 0) - (t.strike_long || 0))) * 100 * t.quantity;
+                    if (t.sub_strategy === 'ic') {
+                         const mw = Math.max(Math.abs((t.strike_short||0)-(t.strike_long||0)), Math.abs((t.strike_call_short||0)-(t.strike_call_long||0)));
+                         used = (mw - (t.price || 0)) * 100 * t.quantity;
+                    } else {
+                         used = (Math.abs((t.strike_short || 0) - (t.strike_long || 0)) - (t.price || 0)) * 100 * t.quantity;
+                    }
                 } else if (t.strategy === 'rockets') {
                     used = (t.entry_executed || t.entry_price || t.price || 0) * t.quantity;
                 }
-                
                 stats[t.strategy].capitalUsed += used;
+
+                // 2. Total Assigned (Wheel only)
+                if (t.strategy === 'wheel' && t.type === 'stock') {
+                    const assignedVal = (t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity;
+                    stats[t.strategy].totalAssigned += assignedVal;
+                }
+
+                // 3. Expected Premium
+                // Filter out stocks, hedges
+                if (t.type !== 'stock' && t.sub_strategy !== 'hedge' && t.sub_strategy !== 'hedge_spread' && t.type !== 'spread') {
+                     let premium = 0;
+                     if (t.target_yield) premium = (t.strike * 100 * t.quantity) * (t.target_yield / 100);
+                     else premium = Math.abs(t.price * 100 * t.quantity);
+                     
+                     stats[t.strategy].totalExpectedPremium += premium;
+                }
             });
         }
 
