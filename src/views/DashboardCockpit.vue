@@ -111,8 +111,10 @@ import KasperProjections from '../components/kasper/KasperProjections.vue';
 import { useRocketState } from '../composables/useRocketState.js';
 import { useKasperState } from '../composables/useKasperState.js';
 import { useDashboardLogic } from '../composables/useDashboardLogic.js';
+import { useLivePrices } from '../composables/useLivePrices.js';
 
 const { init: initRocket, account: rocketAccount, allActiveTrades } = useRocketState();
+const { livePrices, getOccSymbol, getSpreadPrice } = useLivePrices();
 const { 
     init: initKasper, 
     accountsList: kasperAccounts, 
@@ -135,7 +137,7 @@ const {
     activeTradesByStrategy,
     rocketStatsByStrategy,
     rocketAlerts
-} = useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccount, allActiveTrades);
+} = useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccount, allActiveTrades, livePrices, { getOccSymbol, getSpreadPrice });
 
 // Kasper Modal Computed
 const kasperRealTimeCapital = computed(() => {
