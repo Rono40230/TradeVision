@@ -123,12 +123,26 @@ onMounted(async () => {
 
 <style scoped>
 .rocket-academy {
+    /* Main Layout */
     display: flex;
     flex-direction: column;
     flex: 1; 
     min-height: 0; 
     overflow: hidden;
     color: var(--text-color);
+    background-color: var(--background-color, #121212);
+    transition: background-color 0.3s ease;
+}
+
+/* Strategy Themes for the whole page background */
+.rocket-academy.theme-wheel {
+    background-color: rgba(76, 175, 80, 0.05); /* Green Tint */
+}
+.rocket-academy.theme-pcs {
+    background-color: rgba(33, 150, 243, 0.05); /* Blue Tint */
+}
+.rocket-academy.theme-rockets {
+    background-color: rgba(156, 39, 176, 0.05); /* Purple Tint */
 }
 
 .main-layout {
