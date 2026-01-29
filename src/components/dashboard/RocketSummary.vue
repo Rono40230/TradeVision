@@ -2,7 +2,12 @@
     <div class="bento-card rocket-zone">
         <div class="card-header">
             <h3>🚀 Rocket Academy</h3>
-            <span class="badge">{{ activeTradesCount }} actifs</span>
+            <div class="header-badges">
+                <span class="badge">{{ activeTradesCount }} actifs</span>
+                <span class="badge pl-badge" :class="plValue >= 0 ? 'green' : 'red'">
+                    {{ plValue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+                </span>
+            </div>
         </div>
         <div class="card-content">
             <!-- Breakdown Chips -->
