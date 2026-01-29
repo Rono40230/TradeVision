@@ -124,6 +124,7 @@ const activeCount = computed(() => props.activeTrades.length);
 
 const localTotalAssigned = computed(() => props.totalAssigned || 0);
 const localExpectedPremium = computed(() => props.totalExpectedPremium || 0);
+const chartEntries = computed(() => props.history || []);
 
 // THEMBE CLASS
 const themeClass = computed(() => {
