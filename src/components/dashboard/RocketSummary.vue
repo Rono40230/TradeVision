@@ -39,7 +39,8 @@
 defineProps({
     activeTradesCount: { type: Number, default: 0 },
     breakdown: { type: Object, default: () => ({}) },
-    activeTrades: { type: Array, default: () => [] }
+    activeTrades: { type: Array, default: () => [] },
+    plValue: { type: Number, default: 0 }
 });
 </script>
 
