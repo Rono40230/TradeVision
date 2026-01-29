@@ -106,7 +106,7 @@ const totalRocketPL = computed(() => {
         const _tick = priceUtils.lastUpdated.value;
 
         let sum = 0;
-        const prices = priceUtils.livePrices; // Singleton Reactive
+        const prices = priceUtils.livePrices; 
         
         // On parcourt TOUS les trades actifs (risk + neutralized)
         const relevantTrades = allActiveTrades.value.filter(t => 
@@ -114,12 +114,20 @@ const totalRocketPL = computed(() => {
             (t.status === 'open' || t.status === 'neutralized')
         );
 
+        console.log('[DEBUG RocketPL] Start Calculation. Trades:', relevantTrades.length);
+
         relevantTrades.forEach(t => {
             // Logique identique à RocketRiskTable.vue
             // 1. Récupération du prix
             // On vérifie si l'objet existe dans livePrices
             const priceObj = prices[t.symbol];
             
+            console.log(`[DEBUG RocketPL] Trade ${t.symbol}:`, { 
+                priceObj: priceObj, 
+                entry: t.entry_executed || t.price,
+                qty: t.quantity 
+            });
+
             // Si pas de prix, on compte 0 P/L pour ce trade (ou on garde le dernier P/L connu si stocké, mais ici on veut le live)
             if (priceObj && priceObj.price !== undefined && priceObj.price !== null) {
                 const currentPrice = parseFloat(priceObj.price);
@@ -127,11 +135,14 @@ const totalRocketPL = computed(() => {
                 const qty = parseFloat(t.quantity || 0);
 
                 if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
-                    sum += (currentPrice - entry) * qty;
+                    const pl = (currentPrice - entry) * qty;
+                    sum += pl;
+                    console.log(`[DEBUG RocketPL] Added PL: ${pl}`);
                 }
             }
         });
 
+        console.log('[DEBUG RocketPL] Total Sum:', sum);
         return sum;
     });
 
