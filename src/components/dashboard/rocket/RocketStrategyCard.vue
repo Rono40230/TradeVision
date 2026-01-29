@@ -275,13 +275,20 @@ const adviceStatus = computed(() => {
 .progress-bar-fill.warning { background: #facc15; }
 .progress-bar-fill.critical { background: #f87171; }
 
+.card-content-row {
+    display: flex;
+    gap: 1rem;
+    align-items: stretch;
+}
+
 /* Metrics Row - Horizontal */
 .metrics-row {
+    flex: 2; /* Metrics take more space */
     display: flex;
     flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
-    gap: 1.5rem;
+    justify-content: space-between; /* Space out items */
+    gap: 1rem;
     background: rgba(0,0,0,0.2);
     padding: 0.75rem;
     border-radius: 6px;
@@ -290,7 +297,7 @@ const adviceStatus = computed(() => {
 .metric-item {
     display: flex;
     flex-direction: column;
-    min-width: 80px;
+    /* min-width removed to fit better */
 }
 
 .metric-item .lbl {
