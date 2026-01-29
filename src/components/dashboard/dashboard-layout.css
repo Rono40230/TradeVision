@@ -72,7 +72,8 @@
 /* Zone Rocket (Right) */
 .zone-rocket {
     flex: 6; /* 60% width approx */
-    background-color: #161618; /* Dark Grey */
+    /* background-color: #161618;  Dark Grey - OLD */
+    background-color: rgba(158, 206, 106, 0.05); /* Title color (Green) very subdued */
     padding: 1.5rem;
     overflow-y: auto;
 }
