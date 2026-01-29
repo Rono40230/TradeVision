@@ -100,6 +100,7 @@ const icon = computed(() => config.value.icon);
 
 // DATA
 const plLatent = computed(() => {
+    if (props.stats && props.stats.plLatent !== undefined) return props.stats.plLatent;
     return props.activeTrades.reduce((sum, t) => sum + (t.latent_pl || 0), 0);
 });
 
