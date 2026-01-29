@@ -1,5 +1,5 @@
 <template>
-  <div class="rocket-strategy-card bento-card">
+  <div class="rocket-strategy-card bento-card" :class="themeClass">
     <div class="card-header">
        <div class="header-top">
            <div class="title-group">
