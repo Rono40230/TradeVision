@@ -351,4 +351,11 @@ const adviceStatus = computed(() => {
 .coach-advice.neutral { border-left: 3px solid #94a3b8; }
 
 .coach-advice .icon-bulb { font-size: 1.1rem; }
+
+.chart-wrapper {
+    height: 120px;
+    margin-top: 1rem;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 0.5rem;
+}
 </style>
