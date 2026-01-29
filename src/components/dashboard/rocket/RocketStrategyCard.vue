@@ -43,6 +43,12 @@
             <span class="val">{{ activeCount }}</span>
         </div>
 
+        <!-- P/L In-Card (Rockets & PCS) -->
+        <div class="metric-item item-pl" v-if="strategy === 'rockets' || strategy === 'pcs'">
+             <span class="lbl">P/L Latent</span>
+             <span class="val" :class="localPlLatent >= 0 ? 'good-text' : 'warn-text'">{{ formatCurrency(localPlLatent) }}</span>
+        </div>
+
         <!-- Prime Attendue (Wheel Only per RocketHeader) -->
         <div class="metric-item item-premium" v-if="strategy === 'wheel'">
             <span class="lbl">Prime Attendue</span>
