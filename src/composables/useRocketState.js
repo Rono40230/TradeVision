@@ -102,16 +102,26 @@ const rocketGlobalPL = computed(() => {
         if (strategyType.value !== 'rockets') return 0;
         
         let total = 0;
-        const prices = priceUtils.livePrices;
-        
+        const prices = priceUtils.livePrices; // Reactive object
+        if (!prices) return 0;
+
+        // Force reactivity on the entire object for debugging/robustness (simple hack)
+        // Accessing keys ensures we track when new symbols are added
+        const _deps = Object.keys(prices).length; 
+
         // 1. Risk Trades
         const risk = allActiveTrades.value.filter(t => t.strategy === 'rockets' && t.status === 'open');
         risk.forEach(t => {
              const pObj = prices[t.symbol];
-             if (pObj && pObj.price) {
-                  const entry = Number(t.entry_executed || t.price || 0);
-                  const current = Number(pObj.price);
-                  total += (current - entry) * Number(t.quantity);
+             // Log only if needed, but for now just protect against NaN
+             if (pObj && pObj.price !== undefined && pObj.price !== null) {
+                  const entry = parseFloat(t.entry_executed || t.price || 0);
+                  const current = parseFloat(pObj.price);
+                  const qty = parseFloat(t.quantity || 0);
+                  
+                  if (!isNaN(entry) && !isNaN(current) && !isNaN(qty)) {
+                      total += (current - entry) * qty;
+                  }
              }
         });
 
@@ -119,14 +129,14 @@ const rocketGlobalPL = computed(() => {
         const neutralized = allActiveTrades.value.filter(t => t.strategy === 'rockets' && t.status === 'neutralized');
         neutralized.forEach(t => {
              const pObj = prices[t.symbol];
-             if (pObj && pObj.price) {
-                  const entry = Number(t.entry_executed || t.price || 0);
-                  const current = Number(pObj.price);
-                  total += (current - entry) * Number(t.quantity);
-             }
-        });
-
-        return total;
+             if (pObj && pObj.price !== undefined && pObj.price !== null) {
+                  const entry = parseFloat(t.entry_executed || t.price || 0);
+                  const current = parseFloat(pObj.price);
+                  const qty = parseFloat(t.quantity || 0);
+                  
+                  if (!isNaN(entry) && !isNaN(current) && !isNaN(qty)) {
+                      total += (current - entry) * qty;
+                  }
     });
 
     const totalLatentPL = computed(() => {
