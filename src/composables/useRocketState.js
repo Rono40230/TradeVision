@@ -98,31 +98,28 @@ export function useRocketState() {
     // const strategyPL = computed(() => allActiveTrades.value.filter(t => t.strategy === strategyType.value && t.profit_loss).reduce((sum, t) => sum + t.profit_loss, 0));
 
     const totalAssigned = computed(() => (strategyType.value === 'wheel' ? wheelStocks.value.reduce((sum, t) => sum + ((t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity), 0) : 0));
-const totalRocketPL = computed(() => {
-        // Nouvelle implémentation directe
+    const totalRocketPL = computed(() => { 
+        // Force reactivity
+        const _tick = priceUtils.lastUpdated.value; 
         if (strategyType.value !== 'rockets') return 0;
-        
-        // Dépendance de réactivité explicite
-        if (!priceUtils.lastUpdated.value && !priceUtils.livePrices) return 0;
 
         let sum = 0;
         const prices = priceUtils.livePrices; 
         
-        const trades = allActiveTrades.value.filter(t => 
-            t.strategy === 'rockets' && 
-            (t.status === 'open' || t.status === 'neutralized')
-        );
+        // Loop over all trades to find pertinent ones
+        allActiveTrades.value.forEach(t => {
+            if (t.strategy === 'rockets' && (t.status === 'open' || t.status === 'neutralized')) {
+                const sym = t.symbol;
+                // Check price existence
+                if (prices[sym] && prices[sym].price !== undefined) {
+                     const currentPrice = parseFloat(prices[sym].price);
+                     const entry = parseFloat(t.entry_executed || t.price || 0);
+                     const qty = parseFloat(t.quantity || 0);
 
-        trades.forEach(t => {
-            const sym = t.symbol;
-            if (prices[sym]) {
-                 const currentPrice = Number(prices[sym].price);
-                 const entry = Number(t.entry_executed || t.price || 0);
-                 const qty = Number(t.quantity || 0);
-
-                 if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
-                     sum += (currentPrice - entry) * qty;
-                 }
+                     if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
+                         sum += (currentPrice - entry) * qty;
+                     }
+                }
             }
         });
 
