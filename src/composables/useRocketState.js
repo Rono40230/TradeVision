@@ -102,6 +102,9 @@ const totalRocketPL = computed(() => {
         // Nouvelle implémentation directe
         if (strategyType.value !== 'rockets') return 0;
         
+        // Dépendance explicite au refresh des prix
+        const _tick = priceUtils.lastUpdated.value;
+
         let sum = 0;
         const prices = priceUtils.livePrices; // Singleton Reactive
         
