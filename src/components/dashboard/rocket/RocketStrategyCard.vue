@@ -112,6 +112,14 @@ const activeCount = computed(() => props.activeTrades.length);
 const localTotalAssigned = computed(() => props.totalAssigned || 0);
 const localExpectedPremium = computed(() => props.totalExpectedPremium || 0);
 
+// THEMBE CLASS
+const themeClass = computed(() => {
+    if (props.strategy === 'wheel') return 'theme-wheel';
+    if (props.strategy === 'pcs') return 'theme-pcs';
+    if (props.strategy === 'rockets') return 'theme-rockets';
+    return '';
+});
+
 // MM LOGIC
 const mmUsagePct = computed(() => {
     const alloc = props.stats?.capitalAllocated || 1;
