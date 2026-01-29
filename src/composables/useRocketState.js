@@ -222,6 +222,7 @@ export function useRocketState() {
         displayedCapital, activeTradesWheel, wheelOptions, wheelStocks, activeTradesPcs, activeTradesRockets, rocketsTrades,
         currentActiveTrades, currentAssignedTrades, strategyLabel, calendarEvents,
         wheelStats, pcsStats, rocketsStats, mmStatusText, mmStatusColor, totalExpectedPremium,
-        strategyCashUsed, strategyPL, totalAssigned
+        strategyCashUsed, strategyPL, totalAssigned,
+        totalLatentPL
     };
 }
