@@ -95,7 +95,7 @@ export function useRocketState() {
         return used;
     });
 
-    const strategyPL = computed(() => allActiveTrades.value.filter(t => t.strategy === strategyType.value && t.profit_loss).reduce((sum, t) => sum + t.profit_loss, 0));
+    // const strategyPL = computed(() => allActiveTrades.value.filter(t => t.strategy === strategyType.value && t.profit_loss).reduce((sum, t) => sum + t.profit_loss, 0));
 
     const totalAssigned = computed(() => (strategyType.value === 'wheel' ? wheelStocks.value.reduce((sum, t) => sum + ((t.entry_executed || t.entry_price || t.price || 0) * 100 * t.quantity), 0) : 0));
 const rocketGlobalPL = computed(() => {
