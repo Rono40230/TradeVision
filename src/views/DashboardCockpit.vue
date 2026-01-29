@@ -107,7 +107,7 @@ import { useKasperState } from '../composables/useKasperState.js';
 import { useDashboardLogic } from '../composables/useDashboardLogic.js';
 import { useLivePrices } from '../composables/useLivePrices.js';
 
-const { init: initRocket, account: rocketAccount, allActiveTrades } = useRocketState();
+const { init: initRocket, account: rocketAccount, allActiveTrades, db: rocketDb } = useRocketState();
 const { livePrices, getOccSymbol, getSpreadPrice } = useLivePrices();
 const { 
     init: initKasper, 
