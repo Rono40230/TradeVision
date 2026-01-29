@@ -77,18 +77,28 @@
             <p>{{ adviceText }}</p>
         </div>
     </div>
+    
+    <!-- PERFORMANCE CHART (Rocket Only) -->
+    <div class="chart-wrapper" v-if="strategy === 'rockets'">
+        <RocketPerformanceChart
+            :investedCapital="stats?.capitalAllocated || 10000"
+            :entries="chartEntries"
+        />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
+import RocketPerformanceChart from './RocketPerformanceChart.vue';
 
 const props = defineProps({
     strategy: String, // 'wheel', 'pcs', 'rockets'
     activeTrades: Array, // Trades currently open
     stats: Object, // { realizedPl: number, capitalAllocated: number, capitalUsed: number, plLatent: number }
     totalAssigned: Number,
-    totalExpectedPremium: Number
+    totalExpectedPremium: Number,
+    history: { type: Array, default: () => [] } // History of closed trades for chart
 });
 
 const emit = defineEmits(['open-history', 'open-mm']);
