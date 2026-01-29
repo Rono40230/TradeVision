@@ -102,47 +102,30 @@ const totalRocketPL = computed(() => {
         // Nouvelle implémentation directe
         if (strategyType.value !== 'rockets') return 0;
         
-        // Dépendance explicite au refresh des prix
-        const _tick = priceUtils.lastUpdated.value;
+        // Dépendance de réactivité explicite
+        if (!priceUtils.lastUpdated.value && !priceUtils.livePrices) return 0;
 
         let sum = 0;
         const prices = priceUtils.livePrices; 
         
-        // On parcourt TOUS les trades actifs (risk + neutralized)
-        const relevantTrades = allActiveTrades.value.filter(t => 
+        const trades = allActiveTrades.value.filter(t => 
             t.strategy === 'rockets' && 
             (t.status === 'open' || t.status === 'neutralized')
         );
 
-        console.log('[DEBUG RocketPL] Start Calculation. Trades:', relevantTrades.length);
+        trades.forEach(t => {
+            const sym = t.symbol;
+            if (prices[sym]) {
+                 const currentPrice = Number(prices[sym].price);
+                 const entry = Number(t.entry_executed || t.price || 0);
+                 const qty = Number(t.quantity || 0);
 
-        relevantTrades.forEach(t => {
-            // Logique identique à RocketRiskTable.vue
-            // 1. Récupération du prix
-            // On vérifie si l'objet existe dans livePrices
-            const priceObj = prices[t.symbol];
-            
-            console.log(`[DEBUG RocketPL] Trade ${t.symbol}:`, { 
-                priceObj: priceObj, 
-                entry: t.entry_executed || t.price,
-                qty: t.quantity 
-            });
-
-            // Si pas de prix, on compte 0 P/L pour ce trade (ou on garde le dernier P/L connu si stocké, mais ici on veut le live)
-            if (priceObj && priceObj.price !== undefined && priceObj.price !== null) {
-                const currentPrice = parseFloat(priceObj.price);
-                const entry = parseFloat(t.entry_executed || t.price || 0);
-                const qty = parseFloat(t.quantity || 0);
-
-                if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
-                    const pl = (currentPrice - entry) * qty;
-                    sum += pl;
-                    console.log(`[DEBUG RocketPL] Added PL: ${pl}`);
-                }
+                 if (!isNaN(currentPrice) && !isNaN(entry) && !isNaN(qty)) {
+                     sum += (currentPrice - entry) * qty;
+                 }
             }
         });
 
-        console.log('[DEBUG RocketPL] Total Sum:', sum);
         return sum;
     });
 
