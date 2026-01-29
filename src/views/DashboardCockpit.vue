@@ -1,7 +1,5 @@
 <template>
   <div class="dashboard-cockpit">
-    <DashboardHeaderGlobal />
-
     <div class="cockpit-content">
         <!-- ZONE KASPER (Gauche) -->
         <section class="zone-kasper">
