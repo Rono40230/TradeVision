@@ -279,6 +279,7 @@ export function useLivePrices() {
         getSpreadProfit,
         getSpreadPL,
         getSpreadPLClass,
-        getSpreadProfitClass
+        getSpreadProfitClass,
+        lastUpdated
     };
 }
