@@ -134,10 +134,22 @@ export const useRocketActions = () => {
                     updates.push(`close_price = ?`); params.push(closePrice);
                     let pl = 0; const qty = trade.quantity; const openP = trade.price || trade.open_price || trade.entry_price || 0;
                     if (trade.side === 'short') pl = (openP - closePrice) * 100 * qty; else pl = (closePrice - openP) * 100 * qty;
-                    await db.value.execute(`UPDATE trades SET profit_loss = profit_loss + ? WHERE id = ?`, [pl, trade.trade_id]);
+                    
+                    // Update Trade Profit/Loss AND Status
+                    await db.value.execute(`
+                        UPDATE trades 
+                        SET profit_loss = IFNULL(profit_loss, 0) + ?, 
+                            status = 'closed', 
+                            exit_date = ?, 
+                            exit_price = ? 
+                        WHERE id = ?`, 
+                        [pl, today, closePrice, trade.trade_id]
+                    );
                  }
                  params.push(trade.id);
                  await db.value.execute(`UPDATE legs SET ${updates.join(', ')} WHERE id = ?`, params);
+                 
+                 // Re-opening logic
                  if (newStatus === 'open') await db.value.execute(`UPDATE trades SET status = 'open', open_date = ? WHERE id = ?`, [today, trade.trade_id]);
             } else if (trade.strategy === 'pcs') {
                  await db.value.execute(`UPDATE legs SET status = ? WHERE trade_id = ?`, [newStatus, trade.id]);
@@ -210,12 +222,31 @@ export const useRocketActions = () => {
     async function updateTrailingStop(trade, val) {
         try { await db.value.execute("UPDATE trades SET trailing_stop = ? WHERE id = ?", [val, trade.trade_id]); await loadActiveTrades(); } catch (e) {}
     }
-    
+
+    async function fetchHistory(strategy) {
+        if (!db.value) return [];
+        let q = '';
+        if (strategy === 'rockets') {
+             q = `SELECT * FROM trades t WHERE t.strategy = 'rockets' AND t.status = 'closed' ORDER BY t.exit_date ASC`;
+        } else if (strategy === 'pcs') {
+             q = `SELECT * FROM trades t WHERE t.strategy = 'pcs' AND t.status = 'closed' ORDER BY t.exit_date ASC`;
+        } else if (strategy === 'wheel') {
+             q = `SELECT t.*, l.type, l.side, l.strike, l.expiration, l.open_price as price, l.quantity
+                   FROM trades t
+                   LEFT JOIN legs l ON t.id = l.trade_id
+                   WHERE t.strategy = 'wheel' AND t.status = 'closed' 
+                   ORDER BY t.exit_date ASC`;
+        }
+        if (q) return await db.value.select(q);
+        return [];
+    }
+
     async function onTradeSubmitted() { await loadAccountData(); await loadActiveTrades(); }
 
     return {
         init, loadAccountData, loadActiveTrades, saveMMSettings, updateTotalCapital,
         assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted, deleteTrade, confirmDeleteTrade,
-        updateTradeDate, updateTradeQuantity, updateTrailingStop, activateTrade, neutralizeTrade, closeTrade
+        updateTradeDate, updateTradeQuantity, updateTrailingStop, activateTrade, neutralizeTrade, closeTrade,
+        fetchHistory
     };
 };

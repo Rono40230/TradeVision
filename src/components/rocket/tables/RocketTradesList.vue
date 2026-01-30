@@ -27,11 +27,6 @@
       @edit="(t) => $emit('open-entry', t)"
       @delete="(t) => $emit('delete-trade', t)"
     />
-
-    <RocketClosedTable
-      :trades="closedTrades"
-      @delete="(t) => $emit('delete-trade', t)"
-    />
   </div>
 </template>
 
@@ -40,7 +35,6 @@ import { computed } from 'vue';
 import RocketPendingTable from './rockets/RocketPendingTable.vue';
 import RocketRiskTable from './rockets/RocketRiskTable.vue';
 import RocketNeutralizedTable from './rockets/RocketNeutralizedTable.vue';
-import RocketClosedTable from './rockets/RocketClosedTable.vue';
 import { useLivePrices } from '../../../composables/useLivePrices.js';
 
 const props = defineProps({

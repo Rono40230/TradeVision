@@ -63,8 +63,20 @@
         @close="closeModal" 
     />
 
+    <!-- ROCKET HISTORY MODAL -->
+    <RocketHistoryModal
+        v-if="currentModal === 'rocket-history-strat'"
+        :strategy="modalData"
+        :history="
+            modalData === 'rockets' ? rocketClosedHistory : 
+            modalData === 'pcs' ? pcsClosedHistory : 
+            modalData === 'wheel' ? wheelClosedHistory : []
+        "
+        @close="closeModal"
+    />
+
     <!-- OTHER MODALS (Shared Backdrop) -->
-    <div v-if="currentModal && currentModal !== 'rocket-mm'" class="modal-backdrop" @click.self="closeModal">
+    <div v-if="currentModal && currentModal !== 'rocket-mm' && currentModal !== 'rocket-history-strat'" class="modal-backdrop" @click.self="closeModal">
         <!-- MODAL KASPER MM -->
         <div v-if="currentModal === 'kasper-mm'" class="modal-large">
             <header class="modal-header">
@@ -104,6 +116,7 @@ import KasperAccountCard from '../components/dashboard/kasper/KasperAccountCard.
 import RocketAlertsCard from '../components/dashboard/rocket/RocketAlertsCard.vue';
 import RocketStrategyCard from '../components/dashboard/rocket/RocketStrategyCard.vue';
 import RocketMmModal from '../components/dashboard/rocket/RocketMmModal.vue';
+import RocketHistoryModal from '../components/dashboard/rocket/RocketHistoryModal.vue';
 import KasperMmTable from '../components/kasper/KasperMmTable.vue';
 import KasperProjections from '../components/kasper/KasperProjections.vue';
 
@@ -112,7 +125,7 @@ import { useKasperState } from '../composables/useKasperState.js';
 import { useDashboardLogic } from '../composables/useDashboardLogic.js';
 import { useLivePrices } from '../composables/useLivePrices.js';
 
-const { init: initRocket, account: rocketAccount, allActiveTrades, db: rocketDb } = useRocketState();
+const { init: initRocket, account: rocketAccount, allActiveTrades, db: rocketDb, fetchHistory } = useRocketState();
 const { livePrices, getOccSymbol, getSpreadPrice } = useLivePrices();
 const { 
     init: initKasper, 
@@ -128,6 +141,8 @@ const {
 
 const allKasperEntries = ref([]);
 const rocketClosedHistory = ref([]);
+const pcsClosedHistory = ref([]);
+const wheelClosedHistory = ref([]);
 const currentModal = ref(null);
 const modalData = ref(null);
 
@@ -164,20 +179,23 @@ onMounted(async () => {
             allKasperEntries.value = await kasperDb.value.select("SELECT * FROM kasper_daily_journal ORDER BY date ASC");
         }
         if (rocketDb.value) {
-            // Fetch closed trades for Rockets strategy for the chart
-            // We need trades with strategy='rockets' and status='closed'
-            const q = `SELECT t.pl_realized, t.exit_date, t.profit_loss 
-                       FROM trades t 
-                       WHERE t.strategy = 'rockets' AND t.status = 'closed' 
-                       ORDER BY t.exit_date ASC`;
-            rocketClosedHistory.value = await rocketDb.value.select(q);
+            rocketClosedHistory.value = await fetchHistory('rockets');
+            pcsClosedHistory.value = await fetchHistory('pcs');
+            wheelClosedHistory.value = await fetchHistory('wheel');
         }
     } catch (e) { }
 });
 
-const openModal = (type, data = null) => {
+const openModal = async (type, data = null) => {
     currentModal.value = type;
     modalData.value = data;
+
+    if (type === 'rocket-history-strat' && data) {
+         const results = await fetchHistory(data);
+         if (data === 'rockets') rocketClosedHistory.value = results;
+         else if (data === 'pcs') pcsClosedHistory.value = results;
+         else if (data === 'wheel') wheelClosedHistory.value = results;
+    }
 };
 const closeModal = () => currentModal.value = null;
 const modalTitle = computed(() => {
