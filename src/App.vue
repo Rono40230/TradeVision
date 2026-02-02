@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, onBeforeUnmount, computed } from "vue";
 import { initDB } from "./utils/db.js";
+import { initIBSyncScheduler, stopIBSyncScheduler } from "./utils/ibSyncSchedulerSetup.js";
 import DashboardCockpit from "./views/DashboardCockpit.vue";
 import ImportView from "./views/ImportView.vue";
 import HistoriqueView from "./views/HistoriqueView.vue";
@@ -15,6 +16,13 @@ const currentView = ref('dashboard');
 
 onMounted(async () => {
   db.value = await initDB();
+  // Start background IB sync scheduler
+  await initIBSyncScheduler();
+});
+
+onBeforeUnmount(() => {
+  // Clean up scheduler on app close
+  stopIBSyncScheduler();
 });
 </script>
 
