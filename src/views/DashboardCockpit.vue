@@ -40,6 +40,12 @@
                          <span class="btn-icon">➜</span>
                     </button>
                 </div>
+                <div class="title-group" style="margin-top: 0.5rem;">
+                    <button class="nav-title-btn historique" @click="$emit('navigate', 'historique')">
+                         <h3>📊 IB HISTORY</h3>
+                         <span class="btn-icon">➜</span>
+                    </button>
+                </div>
             </header>
 
             <!-- ALERT SYSTEM -->
@@ -208,6 +214,12 @@ const modalTitle = computed(() => {
     background-color: rgba(152, 251, 152, 0.1); /* Pastel Green - 10% opacity */
     color: #98FB98;            /* Light Green Text for contrast */
     border-color: rgba(152, 251, 152, 0.3);
+}
+
+.nav-title-btn.historique {
+    background-color: rgba(255, 165, 0, 0.1); /* Pastel Orange - 10% opacity */
+    color: #FFB366;            /* Light Orange Text for contrast */
+    border-color: rgba(255, 165, 0, 0.3);
 }
 
 .nav-title-btn h3 {

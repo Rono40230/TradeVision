@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from "vue";
 import { initDB } from "./utils/db.js";
 import DashboardCockpit from "./views/DashboardCockpit.vue";
 import ImportView from "./views/ImportView.vue";
+import HistoriqueView from "./views/HistoriqueView.vue";
 import RocketAcademy from "./components/RocketAcademy.vue";
 import KasperAcademy from "./components/KasperAcademy.vue";
 import AppTitlebar from "./components/AppTitlebar.vue";
@@ -30,6 +31,11 @@ onMounted(async () => {
 
         <ImportView
             v-else-if="currentView === 'import'"
+            @back="currentView = 'dashboard'"
+        />
+
+        <HistoriqueView
+            v-else-if="currentView === 'historique'"
             @back="currentView = 'dashboard'"
         />
 
