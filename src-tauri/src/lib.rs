@@ -4,6 +4,8 @@
 use serde_json::Value;
 use std::collections::HashMap;
 
+pub mod modules;
+
 /// Greets the user.
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -104,8 +106,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![greet, fetch_market_quotes])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            fetch_market_quotes,
+            fetch_ib_trades
+        ])
         .run(tauri::generate_context!())
         .map_err(|e| eprintln!("error while running tauri application: {}", e))
         .ok();
+}
+
+/// Commande Tauri: Récupère les trades depuis IB Gateway
+#[tauri::command]
+async fn fetch_ib_trades(account_id: String) -> Result<Vec<modules::ib_gateway::IBTrade>, String> {
+    modules::ib_gateway::fetch_ib_trades(account_id).await
 }
