@@ -95,5 +95,46 @@ export async function initDB() {
   } catch (e) {
   }
 
+  // IB Gateway Historical Trades (Phase 1.2)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS rocket_trades_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ib_trade_id TEXT UNIQUE NOT NULL,
+      symbol TEXT NOT NULL,
+      asset_class TEXT,
+      side TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      price_avg REAL NOT NULL,
+      commission REAL DEFAULT 0,
+      realized_pnl REAL,
+      unrealized_pnl REAL,
+      open_date TEXT NOT NULL,
+      close_date TEXT,
+      expiry TEXT,
+      strike REAL,
+      strategy TEXT,
+      order_type TEXT,
+      synced_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(strategy) REFERENCES strategies(id)
+    )
+  `);
+
+  // Create index for performance
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_ib_trade_id ON rocket_trades_history(ib_trade_id)"); } catch(e) {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_strategy ON rocket_trades_history(strategy)"); } catch(e) {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_symbol ON rocket_trades_history(symbol)"); } catch(e) {}
+
+  // Sync metadata
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS sync_metadata (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      last_sync_date TEXT,
+      trades_synced INTEGER DEFAULT 0,
+      next_sync_date TEXT,
+      account_id TEXT,
+      UNIQUE(account_id)
+    )
+  `);
+
   return db;
 }
