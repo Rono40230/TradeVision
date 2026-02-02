@@ -25,22 +25,11 @@ const close = async () => {
     <div class="titlebar" data-tauri-drag-region>
       <div class="nav-tabs" data-tauri-drag-region>
           <button 
+            class="nav-btn dashboard-btn"
             :class="{ active: modelValue === 'dashboard' }" 
             @click="$emit('update:modelValue', 'dashboard')"
           >
             Dashboard
-          </button>
-          <button 
-            :class="{ active: modelValue === 'rocket-academy' }" 
-            @click="$emit('update:modelValue', 'rocket-academy')"
-          >
-            Rocket Academy
-          </button>
-          <button 
-            :class="{ active: modelValue === 'kasper-academy' }" 
-            @click="$emit('update:modelValue', 'kasper-academy')"
-          >
-            Kasper Academy
           </button>
       </div>
 
@@ -62,12 +51,12 @@ const close = async () => {
 
 <style scoped>
 .titlebar {
-  height: 38px;
+  height: 60px;
   background: var(--sidebar-bg);
   user-select: none;
   display: flex;
   justify-content: space-between;
-  align-items: center; /* Center Vertically */
+  align-items: center; 
   z-index: 9999;
   border-bottom: 1px solid var(--border-color);
   flex: 0 0 auto;
@@ -85,36 +74,60 @@ const close = async () => {
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 0.5rem;
+    gap: 1.5rem;
     height: 100%;
     align-items: center;
-    -webkit-app-region: no-drag; /* Important to click buttons */
+    -webkit-app-region: no-drag; 
 }
 
-.nav-tabs button {
+/* Styles des boutons de navigation */
+.nav-btn {
     background: transparent;
-    border: none;
+    border: 2px solid rgba(255,255,255,0.1);
     color: var(--text-muted);
-    padding: 0 12px;
-    height: 100%; /* Full height for ease of click */
+    padding: 8px 24px;   /* Plus larges */
+    height: auto; 
     cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
-    transition: all 0.2s;
-    border-bottom: 2px solid transparent;
-    opacity: 0.7;
+    font-size: 1.1rem;   /* Police plus grande */
+    font-weight: 700;
+    transition: all 0.3s ease;
+    border-radius: 8px;  /* Cadre arrondi */
+    opacity: 0.8;
 }
 
-.nav-tabs button:hover {
-    color: var(--text-color);
+.nav-btn:hover {
+    transform: translateY(-2px);
     opacity: 1;
-    background: rgba(255,255,255,0.05);
 }
 
-.nav-tabs button.active {
-    color: var(--accent-color);
-    border-bottom: 2px solid var(--accent-color);
-    opacity: 1;
+/* Dashboard: Violet Pale */
+.nav-btn.dashboard-btn {
+    border-color: #D8BFD8; 
+}
+.nav-btn.dashboard-btn.active, .nav-btn.dashboard-btn:hover {
+    background-color: #D8BFD8;
+    color: #2c2c2c;
+    box-shadow: 0 0 15px rgba(216, 191, 216, 0.3);
+}
+
+/* Rocket Academy: Vert Pale */
+.nav-btn.rocket-btn {
+    border-color: #98FB98; 
+}
+.nav-btn.rocket-btn.active, .nav-btn.rocket-btn:hover {
+    background-color: #98FB98;
+    color: #1a4d1a;
+    box-shadow: 0 0 15px rgba(152, 251, 152, 0.3);
+}
+
+/* Kasper Academy: Bleu Pale */
+.nav-btn.kasper-btn {
+    border-color: #ADD8E6; 
+}
+.nav-btn.kasper-btn.active, .nav-btn.kasper-btn:hover {
+    background-color: #ADD8E6;
+    color: #1a3c4d;
+    box-shadow: 0 0 15px rgba(173, 216, 230, 0.3);
 }
 
 .window-controls {

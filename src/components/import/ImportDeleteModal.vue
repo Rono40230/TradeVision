@@ -1,7 +1,7 @@
-<script setup lang="ts">
-defineProps<{
-    show: boolean
-}>();
+<script setup>
+defineProps({
+    show: Boolean
+});
 
 const emit = defineEmits(['confirm', 'cancel']);
 </script>

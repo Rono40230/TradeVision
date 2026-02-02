@@ -24,6 +24,18 @@
              <span class="val">{{ format(totalAssigned) }}</span>
         </div>
 
+        <!-- P/L Total (Wheel & PCS) -->
+        <div class="metric-item item-pl-total" v-if="strategy === 'wheel' || strategy === 'pcs'">
+            <span class="lbl">P/L Total</span>
+            <span class="val" :class="plTotal >= 0 ? 'good-text' : 'warn-text'">{{ format(plTotal) }}</span>
+        </div>
+
+        <!-- P/L Mensuel (Wheel & PCS) -->
+        <div class="metric-item item-pl-monthly" v-if="strategy === 'wheel' || strategy === 'pcs'">
+            <span class="lbl">P/L Mensuel</span>
+            <span class="val" :class="plMensuel >= 0 ? 'good-text' : 'warn-text'">{{ format(plMensuel) }}</span>
+        </div>
+
         <!-- Cash Dispo -->
         <div class="metric-item item-avail">
             <span class="lbl">Cash Dispo</span>
@@ -39,7 +51,10 @@ const props = defineProps({
     plLatent: Number,
     expectedPremium: Number,
     totalAssigned: Number,
-    capitalAvailable: Number
+    capitalAvailable: Number,
+    plTotal: Number,
+    plMensuel: Number,
+    history: Array
 });
 
 const format = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v || 0);

@@ -1,16 +1,16 @@
-<script setup lang="ts">
-const props = defineProps<{
-    trades: any[],
-    sortKey: string,
-    sortDirection: string
-}>();
+<script setup>
+const props = defineProps({
+    trades: Array,
+    sortKey: String,
+    sortDirection: String
+});
 
 const emit = defineEmits(['sort', 'delete', 'updateStrategy']);
 
 /**
  * Détermine quelle valeur afficher pour le P/L selon la stratégie
  */
-const formatPnl = (trade: any) => {
+const formatPnl = (trade) => {
     // 1. Pour les Actions (Rockets), on veut le P/L Réalisé
     if (trade.detectedStrategy === 'Rockets') {
         if (trade.realizedPnl && trade.realizedPnl !== 0) {
@@ -26,7 +26,7 @@ const formatPnl = (trade: any) => {
 /**
  * Classe CSS pour colorer le P/L
  */
-const getPnlClass = (trade: any) => {
+const getPnlClass = (trade) => {
     let value = 0;
     
     if (trade.detectedStrategy === 'Rockets') {
@@ -39,7 +39,7 @@ const getPnlClass = (trade: any) => {
     return value >= 0 ? 'text-green' : 'text-red';
 };
 
-const handleSort = (key: string) => {
+const handleSort = (key) => {
     emit('sort', key);
 };
 </script>

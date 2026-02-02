@@ -5,7 +5,10 @@
         <section class="zone-kasper">
             <header class="zone-header">
                 <div class="title-group">
-                    <h2>KASPER ACADEMY</h2>
+                    <button class="nav-title-btn kasper" @click="$emit('navigate', 'kasper-academy')">
+                         <h3>KASPER ACADEMY</h3>
+                         <span class="btn-icon">➜</span>
+                    </button>
                 </div>
             </header>
             
@@ -32,7 +35,10 @@
         <section class="zone-rocket">
             <header class="zone-header">
                 <div class="title-group">
-                    <h2>ROCKET ACADEMY</h2>
+                    <button class="nav-title-btn rocket" @click="$emit('navigate', 'rocket-academy')">
+                         <h3>ROCKET ACADEMY</h3>
+                         <span class="btn-icon">➜</span>
+                    </button>
                 </div>
             </header>
 
@@ -56,56 +62,25 @@
         </section>
     </div>
 
-    <!-- ROCKET MM MODAL (Has its own backdrop) -->
-    <RocketMmModal 
-        v-if="currentModal === 'rocket-mm'" 
-        :strategy="modalData" 
-        @close="closeModal" 
-    />
-
-    <!-- ROCKET HISTORY MODAL -->
-    <RocketHistoryModal
-        v-if="currentModal === 'rocket-history-strat'"
-        :strategy="modalData"
-        :history="
-            modalData === 'rockets' ? rocketClosedHistory : 
-            modalData === 'pcs' ? pcsClosedHistory : 
-            modalData === 'wheel' ? wheelClosedHistory : []
-        "
-        @close="closeModal"
-    />
-
-    <!-- OTHER MODALS (Shared Backdrop) -->
-    <div v-if="currentModal && currentModal !== 'rocket-mm' && currentModal !== 'rocket-history-strat'" class="modal-backdrop" @click.self="closeModal">
-        <!-- MODAL KASPER MM -->
-        <div v-if="currentModal === 'kasper-mm'" class="modal-large">
-            <header class="modal-header">
-                <h3>Money Management ({{ kasperActiveAccount?.name }})</h3>
-                <button class="close-btn" @click="closeModal">×</button>
-            </header>
-            <div class="modal-body">
-                <KasperMmTable 
-                    :pairsConfig="kasperPairsConfig" 
-                    :account="kasperActiveAccount"
-                    :currentCapital="kasperRealTimeCapital"
-                    @updatePair="updatePair"
-                    @deletePair="deletePair"
-                    @addPair="addPair"
-                >
-                     <template #projections>
-                         <KasperProjections :baseRiskAmount="kasperBaseRiskAmount" />
-                     </template>
-                </KasperMmTable>
-            </div>
-        </div>
-
-        <!-- DEFAULT / OTHER MODALS -->
-        <div v-else class="modal-simple" @click.stop>
-            <h3>{{ modalTitle }}</h3>
-            <p>Contenu en cours de développement...</p>
-            <button @click="closeModal">Fermer</button>
-        </div>
     </div>
+
+    <!-- MODALES TABLEAU DE BORD -->
+    <DashboardModals
+        :currentModal="currentModal"
+        :modalData="modalData"
+        :rocketClosedHistory="rocketClosedHistory"
+        :pcsClosedHistory="pcsClosedHistory"
+        :wheelClosedHistory="wheelClosedHistory"
+        :kasperActiveAccount="kasperActiveAccount"
+        :kasperPairsConfig="kasperPairsConfig"
+        :kasperRealTimeCapital="kasperRealTimeCapital"
+        :kasperBaseRiskAmount="kasperBaseRiskAmount"
+        :modalTitle="modalTitle"
+        @close="closeModal"
+        @updatePair="updatePair"
+        @deletePair="deletePair"
+        @addPair="addPair"
+    />
   </div>
 </template>
 
@@ -115,15 +90,14 @@ import KasperSummaryCard from '../components/dashboard/kasper/KasperSummaryCard.
 import KasperAccountCard from '../components/dashboard/kasper/KasperAccountCard.vue';
 import RocketAlertsCard from '../components/dashboard/rocket/RocketAlertsCard.vue';
 import RocketStrategyCard from '../components/dashboard/rocket/RocketStrategyCard.vue';
-import RocketMmModal from '../components/dashboard/rocket/RocketMmModal.vue';
-import RocketHistoryModal from '../components/dashboard/rocket/RocketHistoryModal.vue';
-import KasperMmTable from '../components/kasper/KasperMmTable.vue';
-import KasperProjections from '../components/kasper/KasperProjections.vue';
+import DashboardModals from '../components/dashboard/DashboardModals.vue';
 
 import { useRocketState } from '../composables/useRocketState.js';
 import { useKasperState } from '../composables/useKasperState.js';
 import { useDashboardLogic } from '../composables/useDashboardLogic.js';
 import { useLivePrices } from '../composables/useLivePrices.js';
+
+const emit = defineEmits(['navigate']);
 
 const { init: initRocket, account: rocketAccount, allActiveTrades, db: rocketDb, fetchHistory } = useRocketState();
 const { livePrices, getOccSymbol, getSpreadPrice } = useLivePrices();
@@ -206,3 +180,69 @@ const modalTitle = computed(() => {
 </script>
 
 <style scoped src="../components/dashboard/dashboard-layout.css"></style>
+
+<style scoped>
+.title-group {
+    width: 100%;
+}
+
+.nav-title-btn {
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 0.8rem 1.2rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+    width: 100%;
+    margin: 0;
+}
+
+.nav-title-btn.kasper {
+    background-color: rgba(173, 216, 230, 0.1); /* Pastel Blue - 10% opacity */
+    color: #ADD8E6;            /* Light Blue Text for contrast */
+    border-color: rgba(173, 216, 230, 0.3);
+}
+
+.nav-title-btn.rocket {
+    background-color: rgba(152, 251, 152, 0.1); /* Pastel Green - 10% opacity */
+    color: #98FB98;            /* Light Green Text for contrast */
+    border-color: rgba(152, 251, 152, 0.3);
+}
+
+.nav-title-btn h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.nav-title-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    /* Brighten slightly on hover */
+    filter: brightness(1.05); 
+}
+
+.nav-title-btn.kasper:hover {
+    /* Styles handled by brightness filter above, preserving colors */
+}
+
+.nav-title-btn.rocket:hover {
+   /* Styles handled by brightness filter above, preserving colors */
+}
+
+.btn-icon {
+    font-size: 1.2rem;
+    opacity: 0.8;
+    transition: transform 0.2s;
+    font-weight: bold;
+}
+
+.nav-title-btn:hover .btn-icon {
+    transform: translateX(5px);
+    opacity: 1;
+}
+</style>

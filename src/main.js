@@ -4,12 +4,12 @@ import App from "./App.vue";
 const app = createApp(App);
 
 app.config.errorHandler = (err, instance, info) => {
-    // Error handling silent in production for simplicity
-    // To enable debugging, use window['console']['error']
+    console.error("Vue Error:", err);
+    console.error("Info:", info);
 };
 
 window.onerror = function(message, source, lineno, colno, error) {
-   // Global error handler
+   console.error("Global Error:", message, error);
 };
 
 app.mount("#app");

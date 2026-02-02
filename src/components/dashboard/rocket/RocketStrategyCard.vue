@@ -36,6 +36,9 @@
             :expectedPremium="localExpectedPremium"
             :totalAssigned="localTotalAssigned"
             :capitalAvailable="capitalAvailable"
+            :plTotal="plTotal"
+            :plMensuel="plMensuel"
+            :history="chartEntries"
         />
         
         <!-- Footer / Advice -->
@@ -120,6 +123,32 @@ const mmColorClass = computed(() => {
 });
 
 const mmTooltip = computed(() => `Utilisé: ${formatCurrency(props.stats?.capitalUsed)} / Alloué: ${formatCurrency(props.stats?.capitalAllocated)}`);
+
+// CALCULATE P/L METRICS
+const plTotal = computed(() => {
+    if (!chartEntries.value || chartEntries.value.length === 0) return 0;
+    return chartEntries.value.reduce((sum, trade) => {
+        const pnl = trade.realizedPnl || trade.proceeds || 0;
+        return sum + pnl;
+    }, 0);
+});
+
+const plMensuel = computed(() => {
+    if (!chartEntries.value || chartEntries.value.length === 0) return 0;
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    return chartEntries.value.reduce((sum, trade) => {
+        if (!trade.date) return sum;
+        const tradeDate = new Date(trade.date);
+        if (tradeDate.getMonth() === currentMonth && tradeDate.getFullYear() === currentYear) {
+            const pnl = trade.realizedPnl || trade.proceeds || 0;
+            return sum + pnl;
+        }
+        return sum;
+    }, 0);
+});
 
 // ADVICE LOGIC
 const adviceText = computed(() => {
