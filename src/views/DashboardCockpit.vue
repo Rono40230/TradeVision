@@ -62,8 +62,6 @@
         </section>
     </div>
 
-    </div>
-
     <!-- MODALES TABLEAU DE BORD -->
     <DashboardModals
         :currentModal="currentModal"
