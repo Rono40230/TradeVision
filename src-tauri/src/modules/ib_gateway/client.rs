@@ -3,7 +3,9 @@ use std::time::Duration;
 use crate::modules::ib_gateway::auth::IBCredentials;
 use crate::modules::ib_gateway::parser::IBTrade;
 
-const IB_GATEWAY_URL: &str = "http://localhost:7496";
+// IB Gateway REST API endpoint (port 4002 for paper, 4001 for live)
+// When using Docker, localhost:4002 maps to container's 4002 (paper account)
+const IB_GATEWAY_URL: &str = "http://localhost:4002";
 const REQUEST_TIMEOUT: u64 = 30;  // secondes
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY_MS: u64 = 1000;

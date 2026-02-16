@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  ib-gateway:
+    image: ghcr.io/unusualalpha/ib-gateway:latest
+    container_name: ib-gateway
+    restart: unless-stopped
+    environment:
+      TWS_USERID: ${TWS_USERID}
+      TWS_PASSWORD: ${TWS_PASSWORD}
+      TRADING_MODE: ${TRADING_MODE:-paper}
+      READ_ONLY_API: yes
+    ports:
+      - "127.0.0.1:4001:4001"  # Live account port (forwarded to host)
+      - "127.0.0.1:4002:4002"  # Paper account port (forwarded to host)
+      - "127.0.0.1:5900:5900"  # VNC for troubleshooting (optional)
+    volumes:
+      - ib-gateway-data:/root/Jts
+      - ib-gateway-ibc:/root/ibc
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4002"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  ib-gateway-data:
+  ib-gateway-ibc:

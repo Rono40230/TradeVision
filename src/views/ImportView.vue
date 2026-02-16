@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useImportLogic } from '../composables/useImportLogic.js';
 import ImportResultsTable from '../components/import/ImportResultsTable.vue';
 import ImportDeleteModal from '../components/import/ImportDeleteModal.vue';
+import FlexQueryAnalytics from '../components/FlexQueryAnalytics.vue';
 
 const emit = defineEmits(['back']);
 const fileInput = ref(null);
@@ -40,6 +41,9 @@ const confirmDelete = () => {
             <button class="back-btn" @click="emit('back')">← Retour</button>
             <h2>Importer Historique IBKR</h2>
         </div>
+
+        <!-- Flex Query Section -->
+        <FlexQueryAnalytics />
 
         <div class="drop-zone" :class="{ active: isDragging, 'has-file': file }"
             @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop" @click="triggerFileInput">

@@ -109,15 +109,27 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             fetch_market_quotes,
-            fetch_ib_trades
+            fetch_ib_trades,
+            fetch_flex_trades
         ])
         .run(tauri::generate_context!())
         .map_err(|e| eprintln!("error while running tauri application: {}", e))
         .ok();
 }
 
-/// Commande Tauri: Récupère les trades depuis IB Gateway
+/// Commande Tauri: Récupère les trades depuis IB Gateway (ancien - REST)
 #[tauri::command]
 async fn fetch_ib_trades(account_id: String) -> Result<Vec<modules::ib_gateway::IBTrade>, String> {
     modules::ib_gateway::fetch_ib_trades(account_id).await
+}
+
+/// Commande Tauri: Récupère l'historique complet via Flex Query (NOUVEAU - Socket TCP + Flex)
+#[tauri::command]
+async fn fetch_flex_trades(
+    flex_token: String,
+    query_id: i32,
+) -> Result<Vec<modules::tws_socket::FlexTrade>, String> {
+    let config = modules::tws_socket::TWSConfig::default();
+    let client = modules::tws_socket::TWSSyncClient::new(config);
+    client.get_flex_trades(&flex_token, query_id).await
 }
