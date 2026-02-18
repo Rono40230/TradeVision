@@ -56,8 +56,8 @@
                       <td>{{ formatCurrency((trade.entry_executed || trade.price || 0) * (trade.quantity - (trade.exit_partial_quantity || 0))) }}</td>
                       
                       <!-- P/L -->
-                      <td :class="getPLColor(trade, trade.quantity - (trade.exit_partial_quantity || 0))">
-                          {{ formatPL(trade, trade.quantity - (trade.exit_partial_quantity || 0)) }}
+                      <td :class="priceUtils.getLatentPLClass(trade)">
+                          {{ priceUtils.getLatentPL(trade) }}
                       </td>
 
                       <td class="actions-cell">
@@ -81,22 +81,6 @@ defineProps({
 defineEmits(['update-trailing-stop', 'close-rocket', 'delete']);
 
 const priceUtils = useLivePrices();
-
-function getPLColor(trade, qty) {
-    const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
-    if(!currentPrice) return '';
-    const entry = trade.entry_executed || trade.price || 0;
-    const pl = (currentPrice - entry) * qty;
-    return pl >= 0 ? 'positive-text' : 'negative-text';
-}
-
-function formatPL(trade, qty) {
-     const currentPrice = priceUtils.livePrices[trade.symbol]?.price;
-    if(!currentPrice) return '-';
-    const entry = trade.entry_executed || trade.price || 0;
-    const pl = (currentPrice - entry) * qty;
-    return formatCurrency(pl);
-}
 </script>
 
 <style scoped>

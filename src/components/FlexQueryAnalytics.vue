@@ -1,107 +1,139 @@
 <template>
   <div class="flex-analytics-container">
-    <div class="header">
+    <!-- HEADER + CREDENTIALS SUR UNE LIGNE -->
+    <div class="top-bar">
       <h2>📊 Flex Query Analytics</h2>
+
+      <div class="credentials-inline" v-if="showCredentials">
+        <input
+          v-model="flexToken"
+          type="password"
+          placeholder="Jeton Flex Query"
+          class="input-field"
+        />
+        <input
+          v-model.number="queryId"
+          type="number"
+          placeholder="ID requête"
+          class="input-field input-short"
+        />
+        <button
+          @click="fetchTrades"
+          :disabled="loading || !flexToken || !queryId"
+          class="btn btn-primary"
+        >
+          {{ loading ? '⏳' : '🔄' }} {{ loading ? 'Chargement...' : 'Récupérer' }}
+        </button>
+      </div>
+
       <button @click="toggleCredentials" class="btn-toggle">
-        {{ showCredentials ? '🔒 Hide' : '🔓 Show' }} Credentials
-      </button>
-    </div>
-
-    <!-- Credentials Section -->
-    <div v-if="showCredentials" class="credentials-section">
-      <div class="form-group">
-        <label>Flex Token:</label>
-        <input 
-          v-model="flexToken" 
-          type="password" 
-          placeholder="Paste your Flex Query token"
-          class="input-field"
-        />
-      </div>
-
-      <div class="form-group">
-        <label>Query ID:</label>
-        <input 
-          v-model.number="queryId" 
-          type="number" 
-          placeholder="e.g., 123456"
-          class="input-field"
-        />
-      </div>
-
-      <button 
-        @click="fetchTrades" 
-        :disabled="loading || !flexToken || !queryId"
-        class="btn btn-primary"
-      >
-        {{ loading ? '⏳ Loading...' : '🔄 Fetch Trades' }}
+        {{ showCredentials ? '🔒' : '🔓' }}
       </button>
     </div>
 
     <!-- Error/Loading Message -->
     <div v-if="loading" class="loading-message">
       <div class="spinner"></div>
-      <p>⏳ <strong>Fetching trades...</strong></p>
-      <p class="subtitle">If report was recently configured, IBKR may need a few seconds to generate it.</p>
+      <p>⏳ <strong>Récupération des trades...</strong></p>
+      <p class="subtitle">Si le rapport a été récemment configuré, IBKR peut nécessiter quelques secondes pour le générer.</p>
     </div>
     
     <div v-if="error" class="error-message">
       ❌ {{ error }}
       <p v-if="error.includes('Max retries')" class="retry-hint">
-        Try again in 30 seconds after IBKR finishes generating the report.
+        Réessayez dans 30 secondes, le temps qu'IBKR génère le rapport.
       </p>
     </div>
 
-    <!-- Statistics -->
-    <div v-if="trades.length > 0" class="stats-grid">
-      <div class="stat-card">
-        <h3>Total Trades</h3>
-        <p class="stat-value">{{ trades.length }}</p>
+    <!-- Stats -->
+    <div v-if="advancedStats" class="analytics-dashboard">
+      <div class="stats-row">
+        <div class="stat-card">
+          <h3>Trades</h3>
+          <p class="stat-value">{{ advancedStats.totalTrades }}</p>
+        </div>
+        <div class="stat-card">
+          <h3>P/L Net</h3>
+          <p class="stat-value" :class="{ positive: advancedStats.totalNetPnl >= 0, negative: advancedStats.totalNetPnl < 0 }">
+            ${{ advancedStats.totalNetPnl }}
+          </p>
+        </div>
+        <div class="stat-card">
+          <h3>Taux réussite</h3>
+          <p class="stat-value">{{ advancedStats.winRate }}%</p>
+        </div>
+        <div class="stat-card">
+          <h3>ROI</h3>
+          <p class="stat-value" :class="{ positive: advancedStats.totalROI >= 0, negative: advancedStats.totalROI < 0 }">
+            {{ advancedStats.totalROI }}%
+          </p>
+        </div>
+        <div class="stat-card">
+          <h3>Profit Factor</h3>
+          <p class="stat-value">{{ advancedStats.profitFactor }}</p>
+        </div>
+        <div class="stat-card">
+          <h3>R/R Ratio</h3>
+          <p class="stat-value">{{ advancedStats.rewardRiskRatio }}</p>
+        </div>
+        <div class="stat-card">
+          <h3>Drawdown Max</h3>
+          <p class="stat-value negative">${{ advancedStats.maxDrawdown }}</p>
+        </div>
+        <div class="stat-card">
+          <h3>Série gains</h3>
+          <p class="stat-value">{{ advancedStats.maxWinStreak }} <small class="text-muted">/ {{ advancedStats.maxLossStreak }}</small></p>
+        </div>
+        <div class="stat-card">
+          <h3>Gain / Perte moy.</h3>
+          <p class="stat-value">
+            <span class="positive">${{ advancedStats.avgWin }}</span> / <span class="negative">${{ advancedStats.avgLoss }}</span>
+          </p>
+        </div>
+        <div class="stat-card">
+          <h3>Durée moy.</h3>
+          <p class="stat-value">{{ advancedStats.avgHoldingTime }} j</p>
+        </div>
       </div>
-      <div class="stat-card">
-        <h3>Total P&L</h3>
-        <p class="stat-value" :class="{ positive: totalPnL >= 0, negative: totalPnL < 0 }">
-          ${{ totalPnL.toFixed(2) }}
-        </p>
-      </div>
-      <div class="stat-card">
-        <h3>Win Rate</h3>
-        <p class="stat-value">{{ winRate }}%</p>
+
+      <!-- Stratégie + Mensuel côte à côte -->
+      <div class="bottom-row">
+        <div v-if="byStrategy && byStrategy.length > 0" class="strategy-analysis">
+          <h3>Par stratégie</h3>
+          <div class="strategy-grid">
+            <div v-for="strat in byStrategy" :key="strat.name" class="strategy-card">
+              <h4>{{ strat.name }}</h4>
+              <div class="strat-metrics">
+                <div class="strat-pnl" :class="{ positive: strat.pnl >= 0, negative: strat.pnl < 0 }">
+                  ${{ strat.pnl }}
+                </div>
+                <div class="strat-sub">
+                  <span>{{ strat.tradesCount }} trades</span>
+                  <span>WR: {{ strat.winRate }}%</span>
+                  <span>ROI: {{ strat.roi }}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="monthlyPL && monthlyPL.length > 0" class="monthly-breakdown">
+          <h3>Par mois</h3>
+          <div class="monthly-list">
+            <div v-for="m in monthlyPL" :key="m.month" class="month-row">
+              <span class="month-name">{{ m.month }}</span>
+              <span class="month-count">{{ m.tradesCount }} trades</span>
+              <span class="month-pnl" :class="{ positive: m.pnl >= 0, negative: m.pnl < 0 }">
+                ${{ m.pnl }}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- Trades Table -->
-    <div v-if="trades.length > 0" class="trades-section">
-      <table class="trades-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Symbol</th>
-            <th>Side</th>
-            <th>Qty</th>
-            <th>Price</th>
-            <th>Commission</th>
-            <th>P&L</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="trade in trades" :key="trade.trade_id" class="trade-row">
-            <td>{{ trade.date }}</td>
-            <td class="symbol">{{ trade.symbol }}</td>
-            <td :class="trade.side">{{ trade.side }}</td>
-            <td>{{ trade.quantity }}</td>
-            <td>${{ trade.price.toFixed(2) }}</td>
-            <td>${{ trade.commission.toFixed(2) }}</td>
-            <td :class="trade.realized_pnl > 0 ? 'profit' : 'loss'">
-              ${{ trade.realized_pnl.toFixed(2) }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
     <div v-else-if="!loading" class="empty-state">
-      Enter credentials and click "Fetch Trades"
+      <div class="empty-icon">📊</div>
+      <p>Configurez vos identifiants IBKR et cliquez sur "Récupérer les trades" pour voir vos analyses.</p>
     </div>
   </div>
 </template>
@@ -109,15 +141,17 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useFlexQueries } from '../composables/useFlexQueries.js'
+import { useAnalytics } from '../composables/useAnalytics.js'
 
 const {
   trades,
   loading,
   error: fetchError,
-  totalPnL,
-  winRate,
   fetchFlexTrades: fetchFlexTradesApi
 } = useFlexQueries()
+
+// Advanced Analytics
+const { stats: advancedStats, monthlyPL, byStrategy } = useAnalytics(trades)
 
 const flexToken = ref('')
 const queryId = ref(null)
@@ -157,32 +191,136 @@ const toggleCredentials = () => {
 
 <style scoped>
 .flex-analytics-container {
-  padding: 20px;
+  padding: 12px 16px;
   background: #f5f5f5;
   border-radius: 8px;
   margin-bottom: 20px;
 }
 
-.header {
+/* TOP BAR : titre + credentials + toggle sur une ligne */
+.top-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  border-bottom: 2px solid #ddd;
-  padding-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
-.header h2 {
+.top-bar h2 {
   margin: 0;
+  font-size: 1rem;
+  color: #333;
+  white-space: nowrap;
+}
+
+.credentials-inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.credentials-inline .input-field {
+  flex: 2;
+  min-width: 120px;
+}
+
+.input-short {
+  flex: 1 !important;
+  min-width: 90px;
+  max-width: 140px;
+}
+
+.btn-toggle {
+  padding: 6px 10px;
+  background: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-toggle:hover {
+  background: #d0d0d0;
+}
+
+/* STATS EN GRILLE SUR UNE OU DEUX LIGNES */
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.stats-row .stat-card {
+  flex: 1 1 80px;
+  min-width: 80px;
+  padding: 8px 10px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  text-align: center;
+}
+
+.stats-row .stat-card h3 {
+  margin: 0 0 4px 0;
+  color: #777;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stats-row .stat-value {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: bold;
   color: #333;
 }
 
-.credentials-section {
+/* BOTTOM : stratégie + mensuel côte à côte */
+.bottom-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header {
+  display: none;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-top: 20px;
+  padding: 15px;
   background: white;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.page-btn {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.credentials-section {
+  display: none;
 }
 
 .form-group {
@@ -217,7 +355,8 @@ const toggleCredentials = () => {
 .btn-primary {
   background: #007bff;
   color: white;
-  width: 100%;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -304,23 +443,32 @@ const toggleCredentials = () => {
 
 .stat-card {
   background: white;
-  padding: 15px;
+  padding: 10px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   text-align: center;
 }
 
 .stat-card h3 {
-  margin: 0 0 10px 0;
+  margin: 0 0 6px 0;
   color: #666;
-  font-size: 0.9em;
+  font-size: 0.78em;
 }
 
 .stat-value {
   margin: 0;
-  font-size: 1.8em;
+  font-size: 1.4em;
   font-weight: bold;
   color: #333;
+}
+
+.stat-value.mb-0 {
+  margin-bottom: 0;
+}
+
+.text-muted {
+  font-size: 0.8rem;
+  color: #888;
 }
 
 .stat-value.positive {
@@ -331,63 +479,98 @@ const toggleCredentials = () => {
   color: #dc3545;
 }
 
-.trades-section {
+/* New Analysis Sections */
+.strategy-analysis, .monthly-breakdown {
+  flex: 1 1 200px;
+  min-width: 180px;
+  margin-top: 0;
   background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.trades-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.trades-table th {
-  background: #f0f0f0;
   padding: 12px;
-  text-align: left;
-  font-weight: bold;
-  border-bottom: 2px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
 
-.trades-table td {
-  padding: 10px 12px;
+.strategy-analysis h3, .monthly-breakdown h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+  color: #444;
   border-bottom: 1px solid #eee;
+  padding-bottom: 6px;
 }
 
-.trades-table tr:hover {
-  background: #f9f9f9;
+.strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
 }
 
-.symbol {
+.strategy-card {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+}
+
+.strategy-card h4 {
+  margin: 0 0 10px 0;
+  font-size: 1rem;
+  color: #333;
+}
+
+.strat-metrics {
+  display: flex;
+  flex-direction: column;
+}
+
+.strat-pnl {
+  font-size: 1.4rem;
   font-weight: bold;
-  color: #007bff;
+  margin-bottom: 8px;
 }
 
-.BUY {
-  color: #28a745;
+.strat-sub {
+  display: flex;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.monthly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 10px 15px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  align-items: center;
+}
+
+.month-name {
   font-weight: bold;
+  color: #333;
 }
 
-.SELL {
-  color: #dc3545;
-  font-weight: bold;
-}
-
-.profit {
-  color: #28a745;
-  font-weight: bold;
-}
-
-.loss {
-  color: #dc3545;
-  font-weight: bold;
-}
-
-.empty-state {
+.month-count {
+  color: #666;
   text-align: center;
-  padding: 40px 20px;
-  color: #999;
 }
+
+.month-pnl {
+  text-align: right;
+  font-weight: bold;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  opacity: 0.3;
+}
+
+/* Removed styles for Table and Pagination */
 </style>

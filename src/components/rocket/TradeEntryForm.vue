@@ -2,13 +2,6 @@
   <div class="entry-block">
     <h3>Saisie d'Ordre</h3>
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
-    
-    <!-- Strategy Selector -->
-    <div class="strategy-nav">
-        <button :class="{ active: modelValue === 'wheel' }" @click="updateStrategy('wheel')">Wheel</button>
-        <button :class="{ active: modelValue === 'pcs' }" @click="updateStrategy('pcs')">PCS</button>
-        <button :class="{ active: modelValue === 'rockets' }" @click="updateStrategy('rockets')">Rockets</button>
-    </div>
 
     <!-- WHEEL Form -->
     <WheelEntryForm 
@@ -208,13 +201,4 @@ function resetForm() {
     border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem 2rem;
     display: flex; flex-direction: column; overflow-y: auto;
 }
-.strategy-nav {
-    display: flex; margin-bottom: 1.5rem; border: 1px solid var(--border-color);
-    border-radius: 6px; overflow: hidden; flex-shrink: 0; min-height: 40px;
-}
-.strategy-nav button {
-    flex: 1; background: transparent; border: none; color: var(--text-muted);
-    padding: 0.8rem; cursor: pointer; font-weight: 500;
-}
-.strategy-nav button.active { background: var(--accent-color); color: white; }
 </style>

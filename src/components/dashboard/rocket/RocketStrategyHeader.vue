@@ -2,8 +2,11 @@
     <div class="card-header">
        <div class="header-top">
            <div class="title-group">
-               <span class="icon">{{ icon }}</span>
-               <h3>{{ title }}</h3>
+               <button class="title-nav-btn" @click="$emit('open-strategy')" :title="'Ouvrir ' + title">
+                   <span class="icon">{{ icon }}</span>
+                   <h3>{{ title }}</h3>
+                   <span class="nav-arrow">➜</span>
+               </button>
                <div class="strategy-actions">
                     <button class="icon-btn-tiny" @click="$emit('open-history')" title="Historique">📜</button>
                     <button class="icon-btn-tiny" @click="$emit('open-mm')" title="Règles MM">⚖️</button>
@@ -29,7 +32,7 @@ const props = defineProps({
     plLatent: Number
 });
 
-defineEmits(['open-history', 'open-mm']);
+defineEmits(['open-history', 'open-mm', 'open-strategy']);
 
 const formattedPlLatent = computed(() => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(props.plLatent || 0);
@@ -49,11 +52,40 @@ const formattedPlLatent = computed(() => {
     gap: 0.5rem;
 }
 
-.title-group h3 {
+.title-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+    transition: background 0.15s;
+    color: inherit;
+}
+
+.title-nav-btn:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.title-nav-btn h3 {
     margin: 0;
     font-size: 1.1rem;
     font-weight: 700;
     color: #e0e0e0;
+}
+
+.nav-arrow {
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.15s, transform 0.15s;
+    color: #aaa;
+}
+
+.title-nav-btn:hover .nav-arrow {
+    opacity: 1;
+    transform: translateX(3px);
 }
 
 .strategy-actions {

@@ -34,7 +34,7 @@ export function processRocketLifecycles(stockTrades) {
                     description: `Rockets ${trade.symbol}`,
                     originalQuantity: trade.quantity, // On garde la trace de la taille initiale
                     currentQuantity: trade.quantity,  // Ce qui reste en main
-                    totalRealizedPnl: 0, // Le P/L accumulé des ventes partielles
+                    cumulativeRealizedPnl: 0, // Le P/L accumulé des ventes partielles
                     status: 'OPEN',
                     subTrades: [trade] // Historique interne
                 };
@@ -53,8 +53,11 @@ export function processRocketLifecycles(stockTrades) {
             // VENTE (Neutralisation ou Clôture)
             if (position && position.currentQuantity > 0) {
                 // On a une position ouverte, on tape dedans
+                position.subTrades.push(trade);
                 position.currentQuantity += trade.quantity; // trade.quantity est négatif
-                position.totalRealizedPnl += (trade.realizedPnl || 0); // Accumule le P/L
+                
+                // Recalculer le P/L cumulé à partir de tous les sous-trades pour éviter les erreurs d'arrondi ou de cache
+                position.cumulativeRealizedPnl = position.subTrades.reduce((sum, t) => sum + (t.realizedPnl || 0), 0);
                 
                 // Detection statut
                 if (position.currentQuantity <= 0.01) { // Tolérance float
@@ -68,19 +71,25 @@ export function processRocketLifecycles(stockTrades) {
                 
                 // Mise à jour des champs d'affichage principaux
                 position.proceeds += trade.proceeds; // On somme le cash flow
-                // Le realizedPnl principal de l'objet doit refléter la somme totale
-                position.realizedPnl = position.totalRealizedPnl;
-                
-                position.subTrades.push(trade);
+                position.realizedPnl = position.cumulativeRealizedPnl;
             } else {
                 // Vente orpheline (ex: Short ou fin de position d'avant l'historique)
-                // On la traite comme un trade isolé
+                // Si c'est une vente sans position, c'est probablement un SHORT
+                const isShort = trade.quantity < 0;
+                
                 rockets.push({
                     ...trade,
                     detectedStrategy: STRATEGIES.STOCK,
-                    description: `Rockets ${trade.symbol} (Orphelin)`,
-                    status: 'CLOSED' // Par défaut on considère ça comme un flux sortant fini
+                    description: isShort ? `Rockets ${trade.symbol} (Short Open)` : `Rockets ${trade.symbol} (Orphelin)`,
+                    status: isShort ? 'SHORT_OPEN' : 'CLOSED',
+                    currentQuantity: trade.quantity,
+                    cumulativeRealizedPnl: trade.realizedPnl || 0
                 });
+
+                if (isShort) {
+                    // On pourrait tracker le short dans activePositions si on voulait gérer le rachat
+                    // Pour l'instant on suit la roadmap qui demande juste de mieux classer
+                }
             }
         }
     });

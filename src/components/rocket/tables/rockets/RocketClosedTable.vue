@@ -50,23 +50,91 @@
                       </td>
 
                       <td class="actions-cell">
+                          <button class="action-btn edit-btn" @click="startEdit(trade)" title="Modifier">✏️</button>
                           <button class="action-btn delete-btn" @click="$emit('delete', trade)">🗑️</button>
                       </td>
                   </tr>
               </tbody>
           </table>
       </div>
+
+      <!-- OVERLAY EDITION -->
+      <div v-if="editingTrade" class="edit-overlay" @click.self="cancelEdit">
+          <div class="edit-modal">
+              <h4>Modifier le trade — {{ editingTrade.symbol }}</h4>
+              <div class="edit-fields">
+                  <label>
+                      Date de clôture
+                      <input type="date" v-model="editForm.exit_date" />
+                  </label>
+                  <label>
+                      Prix de clôture
+                      <input type="number" step="any" v-model="editForm.exit_price" placeholder="0.00" />
+                  </label>
+              </div>
+              <div class="edit-actions">
+                  <button class="btn-cancel" @click="cancelEdit">Annuler</button>
+                  <button class="btn-save" @click="saveEdit">Enregistrer</button>
+              </div>
+          </div>
+      </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, reactive, watch } from 'vue';
 import { formatCurrency, formatDate, getAssetClass } from '../../../../utils/rocketUtils.js';
 
 const props = defineProps({
     trades: { type: Array, required: true }
 });
 
-defineEmits(['delete']);
+const emit = defineEmits(['delete', 'update-trade']);
+
+const editingTrade = ref(null);
+const editForm = reactive({ exit_date: '', exit_price: '', profit_loss: '' });
+
+// Quantité déduite depuis les données existantes : qty = PL / (exit - entry)
+const derivedQty = ref(0);
+const derivedEntry = ref(0);
+
+// Recalcul automatique du P/L quand exit_price change
+watch(() => editForm.exit_price, (newPrice) => {
+    const exit = parseFloat(newPrice);
+    if (!isNaN(exit) && derivedEntry.value && derivedQty.value) {
+        editForm.profit_loss = ((exit - derivedEntry.value) * derivedQty.value).toFixed(2);
+    }
+});
+
+function startEdit(trade) {
+    editingTrade.value = trade;
+    editForm.exit_date = trade.exit_date ? trade.exit_date.substring(0, 10) : '';
+    editForm.exit_price = trade.exit_price ?? '';
+
+    const entry = parseFloat(trade.entry_executed || trade.price) || 0;
+    const exit  = parseFloat(trade.exit_price) || 0;
+    const pl    = parseFloat(trade.profit_loss) || 0;
+    derivedEntry.value = entry;
+    // Déduire la quantité depuis les données existantes
+    derivedQty.value = (entry > 0 && exit !== entry && pl !== 0)
+        ? pl / (exit - entry)
+        : 0;
+
+    editForm.profit_loss = pl.toFixed(2);
+}
+
+function cancelEdit() {
+    editingTrade.value = null;
+}
+
+function saveEdit() {
+    emit('update-trade', {
+        id: editingTrade.value.id,
+        exit_date: editForm.exit_date,
+        exit_price: parseFloat(editForm.exit_price),
+        profit_loss: parseFloat(editForm.profit_loss)
+    });
+    editingTrade.value = null;
+}
 
 const closedTradesWithStats = computed(() => {
     if (!props.trades) return [];
@@ -83,23 +151,24 @@ const closedTradesWithStats = computed(() => {
         const pl = t.profit_loss || 0;
         runningTotal += pl;
 
-        const entry = t.entry_executed || t.price || 0;
-        const stop = t.stop_loss || 0;
-        const qty = t.quantity || 0;
-        
+        const entry = parseFloat(t.entry_executed || t.price) || 0;
+        const stop  = parseFloat(t.stop_loss || t.trailing_stop) || 0;
+        const exit  = parseFloat(t.exit_price) || 0;
+
+        // RR calculé par unité (ne nécessite pas la quantité)
         let rr = '-';
-        if (entry > 0 && stop > 0 && qty > 0) {
-            const riskPerShare = Math.abs(entry - stop);
-            const totalRisk = riskPerShare * qty;
-            if (totalRisk > 0.01) { 
-                rr = (pl / totalRisk).toFixed(2);
+        if (entry > 0 && stop > 0 && exit > 0) {
+            const riskPerUnit   = Math.abs(entry - stop);
+            const rewardPerUnit = exit - entry;
+            if (riskPerUnit > 0.0001) {
+                rr = (rewardPerUnit / riskPerUnit).toFixed(2);
             }
         }
 
+        // % Perf = variation entre entrée et sortie
         let perfPct = '0.00';
-        if (entry > 0 && qty > 0) {
-            const invested = entry * qty;
-            perfPct = ((pl / invested) * 100).toFixed(2);
+        if (entry > 0 && exit > 0) {
+            perfPct = (((exit - entry) / entry) * 100).toFixed(2);
         }
 
         return {
@@ -136,6 +205,44 @@ const closedTradesWithStats = computed(() => {
 
 .actions-cell { display: flex; flex-direction: row; align-items: center; gap: 5px; white-space: nowrap; }
 .action-btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+.edit-btn { background: transparent; color: #7aa2f7; border: 1px solid #3d5a9a; font-size: 0.95rem; padding: 2px 7px; line-height: 1; }
+.edit-btn:hover { background: rgba(122, 162, 247, 0.15); }
 .delete-btn { background: transparent; color: #999; border: 1px solid #444; font-size: 1rem; padding: 2px 6px; line-height: 1; }
 .delete-btn:hover { background: rgba(255, 0, 0, 0.2); color: #ff6b6b; border-color: #ff6b6b; }
+
+/* EDIT OVERLAY */
+.edit-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(2px);
+}
+.edit-modal {
+    background: #1e2030;
+    border: 1px solid #414868;
+    border-radius: 10px;
+    padding: 1.5rem;
+    width: 360px;
+    display: flex; flex-direction: column; gap: 1.2rem;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+}
+.edit-modal h4 { margin: 0; font-size: 1rem; color: #c0caf5; }
+.edit-fields { display: flex; flex-direction: column; gap: 0.8rem; }
+.edit-fields label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; color: #9aa5ce; }
+.edit-fields input {
+    background: #1a1b26; border: 1px solid #414868; border-radius: 6px;
+    color: #c0caf5; padding: 0.5rem 0.7rem; font-size: 0.9rem;
+    outline: none;
+}
+.edit-fields input:focus { border-color: #7aa2f7; }
+.edit-fields input.readonly-field {
+    background: #13141f; color: #6b7280; cursor: not-allowed;
+    border-color: #2a2d3e; opacity: 0.8;
+}
+.edit-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+.btn-cancel { background: transparent; border: 1px solid #414868; color: #9aa5ce; padding: 0.45rem 1rem; border-radius: 6px; cursor: pointer; }
+.btn-cancel:hover { border-color: #9aa5ce; color: #c0caf5; }
+.btn-save { background: #3d59a1; border: none; color: #fff; padding: 0.45rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; }
+.btn-save:hover { background: #4f6abf; }
 </style>

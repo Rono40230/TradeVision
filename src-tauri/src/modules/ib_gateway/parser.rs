@@ -25,13 +25,29 @@ pub fn parse_ib_trades(json_data: &str) -> Result<Vec<IBTrade>, String> {
     let trades: Vec<IBTrade> = serde_json::from_str(json_data)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
-    // Validation basique: pas de trades avec symbol vide
+    // Validation rigoureuse (Phase 2.1)
     for trade in &trades {
         if trade.symbol.is_empty() {
-            return Err("Trade has empty symbol".to_string());
+            return Err(format!("Trade {} has empty symbol", trade.trade_id));
         }
         if trade.trade_id.is_empty() {
             return Err("Trade has empty trade_id".to_string());
+        }
+        if trade.quantity == 0.0 {
+            return Err(format!("Trade {} has zero quantity", trade.trade_id));
+        }
+        if trade.price <= 0.0 {
+            return Err(format!("Trade {} has invalid price: {}", trade.trade_id, trade.price));
+        }
+        if trade.commission < 0.0 {
+            return Err(format!("Trade {} has negative commission: {}", trade.trade_id, trade.commission));
+        }
+        
+        // Chronologie
+        if let Some(close) = &trade.close_date {
+            if close < &trade.open_date {
+                return Err(format!("Trade {} has close_date {} before open_date {}", trade.trade_id, close, trade.open_date));
+            }
         }
     }
 

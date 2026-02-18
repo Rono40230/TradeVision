@@ -110,7 +110,9 @@ pub fn run() {
             greet,
             fetch_market_quotes,
             fetch_ib_trades,
-            fetch_flex_trades
+            fetch_flex_trades,
+            fetch_positions,
+            create_backup
         ])
         .run(tauri::generate_context!())
         .map_err(|e| eprintln!("error while running tauri application: {}", e))
@@ -123,6 +125,14 @@ async fn fetch_ib_trades(account_id: String) -> Result<Vec<modules::ib_gateway::
     modules::ib_gateway::fetch_ib_trades(account_id).await
 }
 
+/// Commande Tauri: Récupère les positions ouvertes actuelles (NOUVEAU - Socket TCP)
+#[tauri::command]
+async fn fetch_positions() -> Result<Vec<modules::tws_socket::Position>, String> {
+    let config = modules::tws_socket::TWSConfig::default();
+    let client = modules::tws_socket::TWSSyncClient::new(config);
+    client.get_positions().await
+}
+
 /// Commande Tauri: Récupère l'historique complet via Flex Query (NOUVEAU - Socket TCP + Flex)
 #[tauri::command]
 async fn fetch_flex_trades(
@@ -132,4 +142,9 @@ async fn fetch_flex_trades(
     let config = modules::tws_socket::TWSConfig::default();
     let client = modules::tws_socket::TWSSyncClient::new(config);
     client.get_flex_trades(&flex_token, query_id).await
+}
+
+#[tauri::command]
+async fn create_backup(app_handle: tauri::AppHandle) -> Result<String, String> {
+    modules::backup::create_backup(app_handle).await
 }

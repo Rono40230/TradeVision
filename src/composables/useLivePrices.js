@@ -1,5 +1,6 @@
 import { ref, reactive } from 'vue';
 import { fetchPrices } from './useMarketData.js';
+import { useRocketStore } from './rocketStore.js';
 import { 
     formatCurrency, 
     getOccSymbol, 
@@ -175,16 +176,52 @@ export function useLivePrices() {
     }
 
     function getLatentPL(trade) {
-        const sym = getOccSymbol(trade);
-        const pl = calculatePL(trade.price, livePrices[sym]?.price, trade.quantity);
-        return pl !== null ? formatCurrency(pl) : '-';
+        // PRIORITÉ 1: P/L irréalisé IBKR Socket (si disponible)
+        const { livePositions } = useRocketStore();
+        const pos = livePositions.value.find(p => p.symbol === trade.symbol);
+        if (pos) {
+            return formatCurrency(pos.unrealized_pnl);
+        }
+
+        const entryPrice = parseFloat(trade.entry_executed || trade.price);
+        if (!entryPrice) return '-';
+
+        // PRIORITÉ 2a: Options — symbole OCC (expiration + strike + type requis)
+        const occSym = getOccSymbol(trade);
+        if (occSym && livePrices[occSym]?.price !== undefined) {
+            // Options short: P/L = (prime_reçue - valeur_actuelle) * 100 * contrats
+            const pl = (entryPrice - livePrices[occSym].price) * 100 * trade.quantity;
+            return formatCurrency(pl);
+        }
+
+        // PRIORITÉ 2b: Actions / autres — symbole direct
+        const currentPrice = livePrices[trade.symbol]?.price;
+        if (currentPrice !== undefined) {
+            const pl = (currentPrice - entryPrice) * trade.quantity;
+            return formatCurrency(pl);
+        }
+
+        return '-';
     }
 
     function getLatentPLClass(trade) {
-        const sym = getOccSymbol(trade);
-        const currentPrice = livePrices[sym]?.price;
-        if (currentPrice === undefined || !trade.price) return '';
-        return (trade.price - currentPrice) >= 0 ? 'positive-text' : 'negative-text';
+        const { livePositions } = useRocketStore();
+        const pos = livePositions.value.find(p => p.symbol === trade.symbol);
+        if (pos) {
+            return pos.unrealized_pnl >= 0 ? 'positive-text' : 'negative-text';
+        }
+
+        const entryPrice = parseFloat(trade.entry_executed || trade.price);
+        if (!entryPrice) return '';
+
+        const occSym = getOccSymbol(trade);
+        if (occSym && livePrices[occSym]?.price !== undefined) {
+            return (entryPrice - livePrices[occSym].price) >= 0 ? 'positive-text' : 'negative-text';
+        }
+
+        const currentPrice = livePrices[trade.symbol]?.price;
+        if (currentPrice === undefined) return '';
+        return currentPrice >= entryPrice ? 'positive-text' : 'negative-text';
     }
 
     // --- PCS HELPERS ---
@@ -235,6 +272,14 @@ export function useLivePrices() {
     }
     
     function getSpreadPL(trade) {
+        // PRIORITÉ 1: IBKR Socket data (Spread P/L global pour le symbole si dispo)
+        const { livePositions } = useRocketStore();
+        const pos = livePositions.value.find(p => p.symbol === trade.symbol);
+        if (pos) {
+            return formatCurrency(pos.unrealized_pnl);
+        }
+
+        // PRIORITÉ 2: Calcul manuel
         const currentCost = getSpreadPrice(trade, true);
         if (currentCost === null || !trade.price) return '-';
         const pl = (trade.price - currentCost) * 100 * trade.quantity;
@@ -242,6 +287,12 @@ export function useLivePrices() {
     }
 
     function getSpreadPLClass(trade) {
+        const { livePositions } = useRocketStore();
+        const pos = livePositions.value.find(p => p.symbol === trade.symbol);
+        if (pos) {
+            return pos.unrealized_pnl >= 0 ? 'positive-text' : 'negative-text';
+        }
+
         const currentCost = getSpreadPrice(trade, true);
         if (currentCost === null || !trade.price) return '';
         const val = trade.price - currentCost;

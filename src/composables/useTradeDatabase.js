@@ -171,7 +171,7 @@ export function useTradeDatabase() {
           totalSells: stats.total_sells || 0,
           uniqueSymbols: stats.unique_symbols || 0,
           winRate: stats.total_trades > 0 
-            ? ((stats.winning_trades / stats.total_trades) * 100).toFixed(1)
+            ? Math.round((stats.winning_trades / stats.total_trades) * 100 * 10) / 10 
             : 0
         }
       }

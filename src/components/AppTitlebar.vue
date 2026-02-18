@@ -1,8 +1,40 @@
 <script setup>
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { useRocketStore } from '../composables/rocketStore.js';
+import { computed } from 'vue';
 
 defineProps(['modelValue']);
 defineEmits(['update:modelValue']);
+
+const { lastSyncTime, isSyncing, rocketAlerts } = useRocketStore();
+
+const syncStatusClass = computed(() => {
+  if (!lastSyncTime.value) return 'stale';
+  const lastSync = new Date(lastSyncTime.value);
+  const now = new Date();
+  const diffHours = (now - lastSync) / (1000 * 60 * 60);
+
+  if (diffHours < 1) return 'fresh';
+  if (diffHours < 6) return 'warning';
+  return 'stale';
+});
+
+const lastSyncLabel = computed(() => {
+  if (isSyncing.value) return 'Sync en cours...';
+  if (!lastSyncTime.value) return 'Jamais synchronisé';
+  
+  const lastSync = new Date(lastSyncTime.value);
+  const now = new Date();
+  const diffMinutes = Math.floor((now - lastSync) / (1000 * 60));
+  
+  if (diffMinutes < 1) return 'Sync: à l\'instant';
+  if (diffMinutes < 60) return `Sync: il y a ${diffMinutes} min`;
+  
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `Sync: il y a ${diffHours} h`;
+  
+  return `Sync: ${lastSync.toLocaleDateString()}`;
+});
 
 const appWindow = getCurrentWindow();
 
@@ -29,8 +61,21 @@ const close = async () => {
             :class="{ active: modelValue === 'dashboard' }" 
             @click="$emit('update:modelValue', 'dashboard')"
           >
-            Dashboard
+            Tableau de bord
           </button>
+      </div>
+
+      <button 
+        class="nav-btn historique-btn"
+        :class="{ active: modelValue === 'historique' }" 
+        @click="$emit('update:modelValue', 'historique')"
+      >
+        📊 HISTORIQUE IB
+      </button>
+
+      <div class="sync-info" :class="syncStatusClass">
+          <span class="sync-icon" :class="{ rotating: isSyncing }">🔄</span>
+          <span class="sync-text">{{ lastSyncLabel }}</span>
       </div>
 
       <!-- Zone de drag native -->
@@ -69,6 +114,44 @@ const close = async () => {
     height: 100%;
 }
 
+.historique-btn {
+    margin-right: 0.5rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+}
+
+.titlebar-alerts {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-right: 0.75rem;
+    -webkit-app-region: no-drag;
+}
+
+.titlebar-alert {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    cursor: default;
+}
+
+.titlebar-alert.high {
+    background: rgba(244, 67, 54, 0.2);
+    color: #ff6b6b;
+    border: 1px solid rgba(244, 67, 54, 0.4);
+}
+
+.titlebar-alert.medium {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ffb74d;
+    border: 1px solid rgba(255, 152, 0, 0.4);
+}
+
 .nav-tabs {
     position: absolute;
     left: 50%;
@@ -98,6 +181,42 @@ const close = async () => {
 .nav-btn:hover {
     transform: translateY(-2px);
     opacity: 1;
+}
+
+.sync-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-left: auto;
+    margin-right: 20px;
+}
+
+.sync-info.fresh {
+    background: rgba(39, 174, 96, 0.1);
+    color: #2ecc71;
+}
+
+.sync-info.warning {
+    background: rgba(243, 156, 18, 0.1);
+    color: #f39c12;
+}
+
+.sync-info.stale {
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+}
+
+.sync-icon.rotating {
+    animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 /* Dashboard: Violet Pale */

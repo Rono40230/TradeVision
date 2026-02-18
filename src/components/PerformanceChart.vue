@@ -8,9 +8,9 @@
       <canvas ref="monthlyChart"></canvas>
     </div>
     <div class="metrics">
-      <p>Drawdown Max: {{ maxDrawdown.toFixed(2) }}%</p>
-      <p>Sharpe Ratio: {{ sharpeRatio.toFixed(2) }}</p>
-      <p>Win Rate: {{ winRate.toFixed(2) }}%</p>
+      <p>Drawdown Max : {{ maxDrawdown.toFixed(2) }}%</p>
+      <p>Ratio de Sharpe : {{ sharpeRatio.toFixed(2) }}</p>
+      <p>Taux de réussite : {{ winRate.toFixed(2) }}%</p>
     </div>
   </div>
 </template>
@@ -32,14 +32,25 @@ let monthlyChartInstance = null;
 const fetchTrades = async () => {
   try {
     const db = await Database.load('sqlite:trading.db');
-    let result;
+    let manualTrades;
+    let syncedTrades;
+
     if (props.filter && props.filter !== 'all') {
-      result = await db.select('SELECT * FROM trades WHERE asset_type = ? ORDER BY date ASC', [props.filter]);
+      manualTrades = await db.select('SELECT date, profit_loss as pnl FROM trades WHERE asset_type = ? AND is_deleted = 0 ORDER BY date ASC', [props.filter]);
+      // Synced trades strategy filter (mapped to filter if possible)
+      syncedTrades = await db.select('SELECT open_date as date, realized_pnl as pnl FROM rocket_trades_history WHERE strategy = ? AND is_deleted = 0 ORDER BY open_date ASC', [props.filter]);
     } else {
-      result = await db.select('SELECT * FROM trades ORDER BY date ASC');
+      manualTrades = await db.select('SELECT date, profit_loss as pnl FROM trades WHERE is_deleted = 0 ORDER BY date ASC');
+      syncedTrades = await db.select('SELECT open_date as date, realized_pnl as pnl FROM rocket_trades_history WHERE is_deleted = 0 ORDER BY open_date ASC');
     }
-    return result;
+
+    // Combine and sort
+    const allTrades = [...manualTrades, ...syncedTrades];
+    allTrades.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    return allTrades;
   } catch (error) {
+    console.error('Error fetching trades for chart:', error);
     return [];
   }
 };
@@ -60,7 +71,7 @@ const calculateMetrics = (trades) => {
   let winningTrades = 0;
 
   trades.forEach(trade => {
-    const pnl = trade.profit_loss || 0;
+    const pnl = trade.pnl || 0;
     cumulativePnl += pnl;
     pnlData.push(cumulativePnl);
     dates.push(new Date(trade.date).toLocaleDateString());
@@ -164,8 +175,10 @@ onMounted(async () => {
 .chart-container {
   margin-bottom: 20px;
   position: relative;
-  height: 300px;
+  height: 280px;
+  max-height: 280px;
   width: 100%;
+  overflow: hidden;
   background: var(--surface-color, #2c2c2c);
   padding: 10px;
   border-radius: 8px;

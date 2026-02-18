@@ -2,7 +2,10 @@
   <div class="kasper-account-card bento-card">
     <div class="card-header">
         <div class="account-info">
-            <h4>{{ safeAccountName }} <span class="acc-num" v-if="safeAccountNumber">#{{ safeAccountNumber }}</span></h4>
+            <button class="account-nav-btn" @click="$emit('open-account', account.id)">
+                <h4>{{ safeAccountName }} <span class="acc-num" v-if="safeAccountNumber">#{{ safeAccountNumber }}</span></h4>
+                <span class="nav-arrow">➜</span>
+            </button>
         </div>
     </div>
 
@@ -54,6 +57,8 @@ const props = defineProps({
     account: { type: Object, default: () => ({}) },
     entries: { type: Array, default: () => [] }
 });
+
+defineEmits(['open-account', 'open-mm']);
 
 // COMPUTED SAFETIES
 const safeAccountName = computed(() => props.account?.name || 'Account');
@@ -177,6 +182,30 @@ const stats = computed(() => {
     font-size: 1rem;
     color: #fff;
     font-weight: 600;
+}
+
+.account-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    width: 100%;
+    color: inherit;
+    transition: color 0.2s;
+}
+.account-nav-btn:hover { color: #7aa2f7; }
+.account-nav-btn:hover .nav-arrow { opacity: 1; transform: translateX(3px); }
+.account-nav-btn h4 { margin: 0; font-size: 1rem; font-weight: 600; transition: color 0.2s; }
+.account-nav-btn:hover h4 { color: #7aa2f7; }
+.nav-arrow {
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    color: #7aa2f7;
 }
 .acc-num {
     color: #565f89;

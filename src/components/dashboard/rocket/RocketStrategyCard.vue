@@ -6,6 +6,7 @@
         :title="title"
         :icon="icon"
         :plLatent="localPlLatent"
+        @open-strategy="$emit('open-strategy', strategy)"
         @open-history="$emit('open-history')"
         @open-mm="$emit('open-mm')"
     />
@@ -48,19 +49,17 @@
         </div>
     </div>
     
-    <!-- PERFORMANCE CHART (Rocket Only) -->
-    <div class="chart-wrapper" v-if="strategy === 'rockets'">
-        <RocketPerformanceChart
-            :investedCapital="stats?.capitalAllocated || 10000"
-            :entries="chartEntries"
-        />
-    </div>
+    <!-- PERFORMANCE CHART (toutes stratégies) -->
+    <StrategyPerformanceChart
+        :strategy="strategy"
+        :themeColor="themeColor"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue';
-import RocketPerformanceChart from './RocketPerformanceChart.vue';
+import StrategyPerformanceChart from './StrategyPerformanceChart.vue';
 import RocketStrategyHeader from './RocketStrategyHeader.vue';
 import RocketStrategyMetrics from './RocketStrategyMetrics.vue';
 
@@ -73,7 +72,7 @@ const props = defineProps({
     history: { type: Array, default: () => [] } // History of closed trades for chart
 });
 
-defineEmits(['open-history', 'open-mm']);
+defineEmits(['open-history', 'open-mm', 'open-strategy']);
 
 const formatCurrency = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v || 0);
 
@@ -104,6 +103,13 @@ const themeClass = computed(() => {
     if (props.strategy === 'pcs') return 'theme-pcs';
     if (props.strategy === 'rockets') return 'theme-rockets';
     return '';
+});
+
+const themeColor = computed(() => {
+    if (props.strategy === 'wheel') return '#81c784';
+    if (props.strategy === 'pcs') return '#64b5f6';
+    if (props.strategy === 'rockets') return '#ba68c8';
+    return '#7aa2f7';
 });
 
 // MM LOGIC
@@ -265,10 +271,5 @@ const adviceStatus = computed(() => {
 
 .coach-advice .icon-bulb { font-size: 1.1rem; }
 
-.chart-wrapper {
-    height: 120px;
-    margin-top: 1rem;
-    border-top: 1px solid rgba(255,255,255,0.05);
-    padding-top: 0.5rem;
-}
+
 </style>

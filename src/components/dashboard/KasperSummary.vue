@@ -13,7 +13,7 @@
                     <span class="val">{{ formatCurrency(metrics.averageRisk) }}</span>
                 </div>
                 <div class="metric">
-                    <span class="lbl">Win Rate</span>
+                    <span class="lbl">Taux de réussite</span>
                     <span class="val">{{ formatWinrate(metrics.winrate) }}</span> 
                 </div>
             </div>

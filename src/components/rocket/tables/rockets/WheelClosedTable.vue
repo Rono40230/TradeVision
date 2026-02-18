@@ -109,20 +109,18 @@ const closedTradesWithStats = computed(() => {
         const exitPrice = parseFloat(t.exit_price || 0);
         const qty = parseFloat(t.quantity || 0);
         
-        // Calcul % Profit
+        // Calcul % Profit (sans quantité)
         let profitPct = 0;
-        
+
         if (isStock(t)) {
-            // STOCK: ROC (Return on Capital) => PL / (EntryPrice * Qty)
-            const invested = entryPrice * qty;
-            if (invested > 0) {
-                profitPct = ((pl / invested) * 100).toFixed(2);
+            // STOCK: variation % entrée → sortie
+            if (entryPrice > 0 && exitPrice > 0) {
+                profitPct = (((exitPrice - entryPrice) / entryPrice) * 100).toFixed(2);
             }
         } else {
-            // OPTION: % of Max Profit => PL / CreditReceived
-            const credit = entryPrice * 100 * qty;
-            if (credit > 0) {
-                profitPct = ((pl / credit) * 100).toFixed(0);
+            // OPTION Wheel (short): % du crédit capturé = (entrée - sortie) / entrée * 100
+            if (entryPrice > 0 && exitPrice >= 0) {
+                profitPct = (((entryPrice - exitPrice) / entryPrice) * 100).toFixed(0);
             }
         }
 

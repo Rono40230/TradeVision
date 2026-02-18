@@ -1,6 +1,5 @@
 import { ref } from 'vue'
 import { useIBSync } from './useIBSync'
-import { reconcileTrades, validateTrade } from '../utils/ibReconciliation'
 
 /**
  * Composable for automated IB trade synchronization

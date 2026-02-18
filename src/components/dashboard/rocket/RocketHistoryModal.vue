@@ -12,19 +12,20 @@
 
         <RocketClosedTable 
             v-if="strategy === 'rockets'"
-            :trades="history" 
-            @delete="handleDelete" 
+            :trades="localHistory" 
+            @delete="handleDelete"
+            @update-trade="handleUpdate"
         />
 
         <PcsClosedTable 
             v-else-if="strategy === 'pcs'"
-            :trades="history" 
+            :trades="localHistory" 
             @delete="handleDelete" 
         />
 
         <WheelClosedTable 
             v-else-if="strategy === 'wheel'"
-            :trades="history" 
+            :trades="localHistory" 
             @delete="handleDelete" 
         />
         
@@ -38,10 +39,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import RocketClosedTable from '../../rocket/tables/rockets/RocketClosedTable.vue';
 import PcsClosedTable from '../../rocket/tables/rockets/PcsClosedTable.vue';
 import WheelClosedTable from '../../rocket/tables/rockets/WheelClosedTable.vue';
+import { useRocketState } from '../../../composables/useRocketState.js';
 
 const props = defineProps({
   strategy: { type: String, required: true },
@@ -49,6 +51,21 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'delete-trade']);
+
+const { updateClosedTrade, fetchHistory } = useRocketState();
+
+// Copie locale pour rafraichissement sans fermer le modal
+const localHistory = ref([...props.history]);
+watch(() => props.history, (v) => { localHistory.value = [...v]; }, { immediate: true });
+
+async function reloadHistory() {
+    localHistory.value = await fetchHistory(props.strategy);
+}
+
+async function handleUpdate(data) {
+    await updateClosedTrade(data.id, data.exit_date, data.exit_price, data.profit_loss);
+    await reloadHistory();
+}
 
 const strategyTitle = computed(() => {
     switch(props.strategy) {

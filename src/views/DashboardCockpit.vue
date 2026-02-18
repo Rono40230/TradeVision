@@ -1,17 +1,9 @@
 <template>
   <div class="dashboard-cockpit">
+
     <div class="cockpit-content">
         <!-- ZONE KASPER (Gauche) -->
         <section class="zone-kasper">
-            <header class="zone-header">
-                <div class="title-group">
-                    <button class="nav-title-btn kasper" @click="$emit('navigate', 'kasper-academy')">
-                         <h3>KASPER ACADEMY</h3>
-                         <span class="btn-icon">➜</span>
-                    </button>
-                </div>
-            </header>
-            
             <div class="kasper-grid">
                 <!-- Summary -->
                 <KasperSummaryCard 
@@ -26,6 +18,7 @@
                     :key="acc.id" 
                     :account="acc"
                     :entries="kasperEntriesByAccount[acc.id] || []"
+                    @open-account="onOpenKasperAccount"
                     @open-mm="openModal('kasper-mm')"
                 />
             </div>
@@ -33,23 +26,9 @@
 
         <!-- ZONE ROCKET (Droite) -->
         <section class="zone-rocket">
-            <header class="zone-header">
-                <div class="title-group">
-                    <button class="nav-title-btn rocket" @click="$emit('navigate', 'rocket-academy')">
-                         <h3>ROCKET ACADEMY</h3>
-                         <span class="btn-icon">➜</span>
-                    </button>
-                </div>
-                <div class="title-group" style="margin-top: 0.5rem;">
-                    <button class="nav-title-btn historique" @click="$emit('navigate', 'historique')">
-                         <h3>📊 IB HISTORY</h3>
-                         <span class="btn-icon">➜</span>
-                    </button>
-                </div>
-            </header>
 
-            <!-- ALERT SYSTEM -->
-            <RocketAlertsCard :alerts="rocketAlerts" />
+            <!-- GRAPHIQUE DE SYNTHÈSE -->
+            <SynthesisChart />
 
             <div class="rocket-grid">
                 <RocketStrategyCard 
@@ -61,6 +40,7 @@
                     :totalAssigned="rocketStatsByStrategy[strat]?.totalAssigned || 0"
                     :totalExpectedPremium="rocketStatsByStrategy[strat]?.totalExpectedPremium || 0"
                     :history="strat === 'rockets' ? rocketClosedHistory : []"
+                    @open-strategy="onOpenStrategy"
                     @open-history="openModal('rocket-history-strat', strat)"
                     @open-mm="openModal('rocket-mm', strat)"
                 />
@@ -92,7 +72,7 @@
 import { onMounted, computed, ref } from 'vue';
 import KasperSummaryCard from '../components/dashboard/kasper/KasperSummaryCard.vue';
 import KasperAccountCard from '../components/dashboard/kasper/KasperAccountCard.vue';
-import RocketAlertsCard from '../components/dashboard/rocket/RocketAlertsCard.vue';
+import SynthesisChart from '../components/dashboard/rocket/SynthesisChart.vue';
 import RocketStrategyCard from '../components/dashboard/rocket/RocketStrategyCard.vue';
 import DashboardModals from '../components/dashboard/DashboardModals.vue';
 
@@ -100,8 +80,12 @@ import { useRocketState } from '../composables/useRocketState.js';
 import { useKasperState } from '../composables/useKasperState.js';
 import { useDashboardLogic } from '../composables/useDashboardLogic.js';
 import { useLivePrices } from '../composables/useLivePrices.js';
+import { useRocketStore } from '../composables/rocketStore.js';
+import { currentAccountId } from '../composables/useKasperStore.js';
 
 const emit = defineEmits(['navigate']);
+
+const { strategyType } = useRocketStore();
 
 const { init: initRocket, account: rocketAccount, allActiveTrades, db: rocketDb, fetchHistory } = useRocketState();
 const { livePrices, getOccSymbol, getSpreadPrice } = useLivePrices();
@@ -128,8 +112,7 @@ const {
     kasperEntriesByAccount,
     rocketBuyingPower,
     activeTradesByStrategy,
-    rocketStatsByStrategy,
-    rocketAlerts
+    rocketStatsByStrategy
 } = useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccount, allActiveTrades, livePrices, { getOccSymbol, getSpreadPrice });
 
 // Kasper Modal Computed
@@ -176,6 +159,16 @@ const openModal = async (type, data = null) => {
     }
 };
 const closeModal = () => currentModal.value = null;
+
+const onOpenStrategy = (strat) => {
+    strategyType.value = strat;
+    emit('navigate', 'rocket-academy');
+};
+
+const onOpenKasperAccount = (accountId) => {
+    currentAccountId.value = accountId;
+    emit('navigate', 'kasper-academy');
+};
 const modalTitle = computed(() => {
     if (currentModal.value === 'kasper-mm') return 'Règles MM - Kasper';
     if (currentModal.value === 'rocket-history') return 'Historique Global - Rocket';
@@ -186,73 +179,4 @@ const modalTitle = computed(() => {
 <style scoped src="../components/dashboard/dashboard-layout.css"></style>
 
 <style scoped>
-.title-group {
-    width: 100%;
-}
-
-.nav-title-btn {
-    border: 2px solid rgba(255,255,255,0.1);
-    border-radius: 8px;
-    padding: 0.8rem 1.2rem;
-    cursor: pointer;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: all 0.2s ease;
-    width: 100%;
-    margin: 0;
-}
-
-.nav-title-btn.kasper {
-    background-color: rgba(173, 216, 230, 0.1); /* Pastel Blue - 10% opacity */
-    color: #ADD8E6;            /* Light Blue Text for contrast */
-    border-color: rgba(173, 216, 230, 0.3);
-}
-
-.nav-title-btn.rocket {
-    background-color: rgba(152, 251, 152, 0.1); /* Pastel Green - 10% opacity */
-    color: #98FB98;            /* Light Green Text for contrast */
-    border-color: rgba(152, 251, 152, 0.3);
-}
-
-.nav-title-btn.historique {
-    background-color: rgba(255, 165, 0, 0.1); /* Pastel Orange - 10% opacity */
-    color: #FFB366;            /* Light Orange Text for contrast */
-    border-color: rgba(255, 165, 0, 0.3);
-}
-
-.nav-title-btn h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-}
-
-.nav-title-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    /* Brighten slightly on hover */
-    filter: brightness(1.05); 
-}
-
-.nav-title-btn.kasper:hover {
-    /* Styles handled by brightness filter above, preserving colors */
-}
-
-.nav-title-btn.rocket:hover {
-   /* Styles handled by brightness filter above, preserving colors */
-}
-
-.btn-icon {
-    font-size: 1.2rem;
-    opacity: 0.8;
-    transition: transform 0.2s;
-    font-weight: bold;
-}
-
-.nav-title-btn:hover .btn-icon {
-    transform: translateX(5px);
-    opacity: 1;
-}
 </style>

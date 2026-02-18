@@ -110,15 +110,14 @@ const closedTradesWithStats = computed(() => {
 
     return closed.map(t => {
         const entry = parseFloat(t.entry_executed || t.price || 0);
-        const credit = entry * 100 * (t.quantity || 0); // Total Credit Received
-        const pl = parseFloat(t.profit_loss || 0);
-        
-        // % Profit = (PL / Credit) * 100. 
-        // Example: Credit $100. Closed at $20 (PL +$80). % Profit = 80%.
-        // Example: Credit $100. Closed at $150 (PL -$50). % Profit = -50%.
+        const exit  = parseFloat(t.exit_price || 0);
+        const pl    = parseFloat(t.profit_loss || 0);
+
+        // % Profit PCS (short put spread) : % du crédit capturé = (entrée - sortie) / entrée * 100
+        // Exemple : vendu à 1.00$, racheté à 0.20$ → 80% du crédit capturé
         let profitPct = 0;
-        if (credit > 0) {
-            profitPct = ((pl / credit) * 100).toFixed(0);
+        if (entry > 0 && exit >= 0) {
+            profitPct = (((entry - exit) / entry) * 100).toFixed(0);
         }
 
         return {

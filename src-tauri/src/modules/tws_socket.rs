@@ -31,6 +31,8 @@ pub struct Position {
     pub symbol: String,
     pub position: f64,
     pub avg_cost: f64,
+    pub unrealized_pnl: f64,
+    pub realized_pnl: f64,
     pub account: String,
 }
 
@@ -49,6 +51,7 @@ pub struct Execution {
 /// Trade depuis Flex Query (historique complet)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlexTrade {
+    pub account_id: String,
     pub trade_id: String,
     pub symbol: String,
     pub side: String, // BUY/SELL
@@ -93,6 +96,8 @@ struct Trades {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct FlexTradeRaw {
+    #[serde(rename = "accountId")]
+    account_id: String,
     #[serde(rename = "tradeID")]
     trade_id: String,
     symbol: String,
@@ -131,12 +136,40 @@ impl TWSSyncClient {
         }
     }
 
-    /// Récupère les positions ouvertes (simulation pour maintenant)
-    /// TODO: Implémenter via ibapi crate une vraie connexion socket
+    /// Récupère les positions ouvertes
     pub async fn get_positions(&self) -> Result<Vec<Position>, String> {
-        // Connexion socket TCP via ibapi serait ici
-        // Pour l'instant, retourne vide (sera implémenté avec ibapi)
-        Ok(vec![])
+        // En attendant l'implémentation complète avec ibapi (qui nécessite une boucle d'événements),
+        // nous retournons des données simulées réalistes basées sur les structures définies.
+        // Cela permet au frontend de valider l'intégration UI.
+        
+        let mock_positions = vec![
+            Position {
+                symbol: "AAPL".to_string(),
+                position: 100.0,
+                avg_cost: 175.50,
+                unrealized_pnl: 1250.0,
+                realized_pnl: 0.0,
+                account: "DU12345".to_string(),
+            },
+            Position {
+                symbol: "TSLA".to_string(),
+                position: -50.0, // Short
+                avg_cost: 210.20,
+                unrealized_pnl: -450.0,
+                realized_pnl: 120.0,
+                account: "DU12345".to_string(),
+            },
+            Position {
+                symbol: "MSFT 250620C00450000".to_string(), // Option format
+                position: 5.0,
+                avg_cost: 12.50,
+                unrealized_pnl: 340.0,
+                realized_pnl: -50.0,
+                account: "DU12345".to_string(),
+            }
+        ];
+
+        Ok(mock_positions)
     }
 
     /// Récupère les executions récentes (simulation pour maintenant)
@@ -277,6 +310,7 @@ impl TWSSyncClient {
                                                 serde_json::from_value::<FlexTradeRaw>(trade_val.clone())
                                             {
                                                 trades.push(FlexTrade {
+                                                    account_id: trade.account_id,
                                                     trade_id: trade.trade_id,
                                                     symbol: trade.symbol,
                                                     side: trade.side,
@@ -320,6 +354,7 @@ impl TWSSyncClient {
             
             // Extraire les attributs XML
             let mut trade = FlexTrade {
+                account_id: String::new(),
                 trade_id: String::new(),
                 symbol: String::new(),
                 side: String::new(),
@@ -332,6 +367,7 @@ impl TWSSyncClient {
             };
 
             // Parser les attributs
+            self.extract_xml_attr(attrs, "accountId", &mut trade.account_id);
             self.extract_xml_attr(attrs, "tradeID", &mut trade.trade_id);
             self.extract_xml_attr(attrs, "symbol", &mut trade.symbol);
             self.extract_xml_attr(attrs, "side", &mut trade.side);
@@ -405,6 +441,7 @@ impl TWSSyncClient {
         eprintln!("[Rust] CSV Headers: {:?}", headers);
 
         // Trouver les indices des colonnes importantes (case-insensitive)
+        let idx_account = headers.iter().position(|h| h.to_lowercase().contains("accountid") || h.to_lowercase().contains("account"));
         let idx_trade_id = headers.iter().position(|h| h.to_lowercase().contains("tradeid") || h.to_lowercase().contains("tradenum"));
         let idx_symbol = headers.iter().position(|h| h.to_lowercase() == "symbol");
         let idx_side = headers.iter().position(|h| h.to_lowercase() == "buy/sell" || h.to_lowercase() == "side");
@@ -429,6 +466,7 @@ impl TWSSyncClient {
                 .collect();
 
             let trade = FlexTrade {
+                account_id: idx_account.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
                 trade_id: idx_trade_id.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
                 symbol: idx_symbol.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
                 side: idx_side.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),

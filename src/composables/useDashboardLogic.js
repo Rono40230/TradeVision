@@ -1,5 +1,6 @@
 
-import { computed } from 'vue';
+import { computed, watchEffect } from 'vue';
+import { useRocketStore } from './rocketStore.js';
 
 export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccount, allActiveTrades, livePrices, priceUtils) {
     
@@ -144,22 +145,22 @@ export function useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccoun
         return stats;
     });
 
-    // ALERTS LOGIC
-    const rocketAlerts = computed(() => {
+    // ALERTS LOGIC — watchEffect pour s'exécuter même si personne ne lit rocketAlerts
+    const { rocketAlerts: storeAlerts } = useRocketStore();
+    watchEffect(() => {
         const alerts = [];
         const totalCash = rocketAccount.value?.net_liq || 10000;
         const totalUsed = Object.values(rocketStatsByStrategy.value).reduce((s, x) => s + x.capitalUsed, 0);
-        
+
         if (totalUsed > totalCash * 0.9) alerts.push({ level: 'high', message: 'Marge critique', detail: '90% du capital utilisé' });
-        
-        return alerts;
+
+        storeAlerts.value = alerts;
     });
 
     return {
         kasperEntriesByAccount,
         rocketBuyingPower,
         activeTradesByStrategy,
-        rocketStatsByStrategy,
-        rocketAlerts
+        rocketStatsByStrategy
     };
 }

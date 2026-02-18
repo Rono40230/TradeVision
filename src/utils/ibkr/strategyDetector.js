@@ -71,41 +71,79 @@ export function detectStrategies(executions) {
             }
         });
 
-        // --- Stratégie 2: Vertical Spreads (Options pures) ---
-        // Même expiration, Même Type (Call/Put), Strikes différents, Sens Opposés
-        if (options.length === 2) {
-            const leg1 = options[0];
-            const leg2 = options[1];
+        // --- Stratégie 2: Multi-Leg Options (Spreads, IC, Strangles) ---
+        if (options.length >= 2) {
+            // Groupement par expiration pour détecter les stratégies multi-jambes
+            const byExpiry = new Map();
+            options.forEach(o => {
+                if (!byExpiry.has(o.expiry)) byExpiry.set(o.expiry, []);
+                byExpiry.get(o.expiry).push(o);
+            });
 
-            if (leg1.assetType === 'OPT' && leg2.assetType === 'OPT' &&
-                leg1.expiry === leg2.expiry &&
-                leg1.type === leg2.type && // Tous les deux Calls ou Puts
-                leg1.strike !== leg2.strike &&
-                isOppositeSide(leg1.side, leg2.side)) {
-                
-                finalStrategies.push({
-                    id: `vs-${key}`,
-                    date: leg1.date,
-                    symbol: leg1.symbol,
-                    detectedStrategy: STRATEGIES.VERTICAL_SPREAD,
-                    description: `Vertical Spread ${leg1.type} ${leg1.expiry}`,
-                    legs: [leg1, leg2],
-                    quantity: Math.min(Math.abs(leg1.quantity), Math.abs(leg2.quantity)),
-                    proceeds: leg1.proceeds + leg2.proceeds,
-                    commission: leg1.commission + leg2.commission,
-                    side: (leg1.proceeds + leg2.proceeds) > 0 ? 'CREDIT' : 'DEBIT',
-                    strike: `${Math.min(leg1.strike, leg2.strike)} / ${Math.max(leg1.strike, leg2.strike)}`,
-                    expiry: leg1.expiry,
-                    type: leg1.type // Indispensable pour distinguer PCS de CCS plus tard
-                });
-                return;
-            }
+            byExpiry.forEach((expiryOptions, expiry) => {
+                if (expiryOptions.length === 2) {
+                    const [leg1, leg2] = expiryOptions;
+                    if (leg1.type === leg2.type && isOppositeSide(leg1.side, leg2.side)) {
+                        // Vertical Spread
+                        finalStrategies.push({
+                            id: `vs-${key}-${expiry}`,
+                            date: leg1.date,
+                            symbol: leg1.symbol,
+                            detectedStrategy: STRATEGIES.VERTICAL_SPREAD,
+                            description: `Vertical Spread ${leg1.type} ${expiry}`,
+                            legs: [leg1, leg2],
+                            quantity: Math.min(Math.abs(leg1.quantity), Math.abs(leg2.quantity)),
+                            proceeds: leg1.proceeds + leg2.proceeds,
+                            commission: leg1.commission + leg2.commission,
+                            side: (leg1.proceeds + leg2.proceeds) > 0 ? 'CREDIT' : 'DEBIT',
+                            strike: `${Math.min(leg1.strike, leg2.strike)} / ${Math.max(leg1.strike, leg2.strike)}`,
+                            expiry: expiry,
+                            type: leg1.type
+                        });
+                        // Mark as processed
+                        expiryOptions.forEach(o => o._processed = true);
+                    } else if (leg1.type !== leg2.type && leg1.side === leg2.side) {
+                        // Strangle / Straddle
+                        finalStrategies.push({
+                            id: `st-${key}-${expiry}`,
+                            date: leg1.date,
+                            symbol: leg1.symbol,
+                            detectedStrategy: leg1.strike === leg2.strike ? STRATEGIES.STRADDLE : STRATEGIES.STRANGLE,
+                            description: `${leg1.strike === leg2.strike ? 'Straddle' : 'Strangle'} ${expiry}`,
+                            legs: [leg1, leg2],
+                            quantity: Math.min(Math.abs(leg1.quantity), Math.abs(leg2.quantity)),
+                            proceeds: leg1.proceeds + leg2.proceeds,
+                            commission: leg1.commission + leg2.commission,
+                            expiry: expiry
+                        });
+                        expiryOptions.forEach(o => o._processed = true);
+                    }
+                } else if (expiryOptions.length === 4) {
+                    // Iron Condor candidate
+                    const puts = expiryOptions.filter(o => o.type === 'P');
+                    const calls = expiryOptions.filter(o => o.type === 'C');
+                    if (puts.length === 2 && calls.length === 2) {
+                        finalStrategies.push({
+                            id: `ic-${key}-${expiry}`,
+                            date: expiryOptions[0].date,
+                            symbol: expiryOptions[0].symbol,
+                            detectedStrategy: 'pcs iron condor',
+                            description: `Iron Condor ${expiry}`,
+                            legs: expiryOptions,
+                            quantity: Math.min(...expiryOptions.map(o => Math.abs(o.quantity))),
+                            proceeds: expiryOptions.reduce((s, o) => s + o.proceeds, 0),
+                            commission: expiryOptions.reduce((s, o) => s + o.commission, 0),
+                            expiry: expiry,
+                            strike: `${Math.min(...puts.map(p => p.strike))}/${Math.max(...puts.map(p => p.strike))} -- ${Math.min(...calls.map(c => c.strike))}/${Math.max(...calls.map(c => c.strike))}`
+                        });
+                        expiryOptions.forEach(o => o._processed = true);
+                    }
+                }
+            });
         }
 
-        // --- Stratégie 3: Iron Condor / Strangle (4 pattes ou 2 pattes mixtes) ---
-        
-        // Si aucune stratégie complexe trouvée, on retourne les trades individuels tels quels
-        const remainingOptions = options; // Les stocks sont gérés au dessus (ou ici si pas de CC)
+        // --- Stratégie 3: Fallback (Trades restants) ---
+        const remainingOptions = options.filter(o => !o._processed);
 
         remainingOptions.forEach(trade => {
             // Détection basique unitaire pour les Options
@@ -188,8 +226,8 @@ export function detectStrategies(executions) {
     const renamed = dedupedStrategies.map(strat => {
         let name = strat.detectedStrategy;
 
-        // RÈGLE 1 : WHEEL & PROTECTION
-        if (name === STRATEGIES.SHORT_PUT || name === STRATEGIES.COVERED_CALL || name === STRATEGIES.SHORT_CALL ||
+        // RÈGLE 1 : WHEEL & PROTECTION (On garde Covered Call tel quel pour l'instant)
+        if (name === STRATEGIES.SHORT_PUT || name === STRATEGIES.SHORT_CALL ||
             name === STRATEGIES.LONG_CALL || name === STRATEGIES.LONG_PUT) {
             name = 'Wheel';
         }
@@ -210,21 +248,11 @@ export function detectStrategies(executions) {
                 name = 'Rockets';
             }
         }
-
-        // RÈGLE 3 : PCS STANDARD
-        if (name === 'Put Credit Spread' || name === 'Call Credit Spread' || name === 'Call Debit Spread' || name === 'Put Debit Spread') {
-            name = 'pcs standard'; // minuscule comme demandé
-        }
-
-        // RÈGLE 4 : CONVERSION DEVISE
-        if (name === STRATEGIES.UNKNOWN && (strat.assetType === 'CASH' || strat.symbol.includes('.'))) {
-            name = 'Change devise';
-        }
         
         return { ...strat, detectedStrategy: name };
     });
 
-    // Etape 4b : Fusion Intelligente (PCS + CCS = Iron Condor)
+    // Etape 4b : Fusion Intelligente (Put Spread + Call Spread = Iron Condor)
     const groupBySymbolDate = new Map();
     
     renamed.forEach(strat => {
@@ -234,8 +262,8 @@ export function detectStrategies(executions) {
     });
 
     groupBySymbolDate.forEach((strats) => {
-        // On cherche s'il y a un PCS Standard ET un Call Credit Spread
-        const pcs = strats.find(s => s.detectedStrategy === 'pcs standard');
+        // On cherche s'il y a un Put Credit Spread ET un Call Credit Spread
+        const pcs = strats.find(s => s.detectedStrategy === 'Put Credit Spread');
         const ccs = strats.find(s => s.detectedStrategy === 'Call Credit Spread');
 
         if (pcs && ccs) {
@@ -253,15 +281,66 @@ export function detectStrategies(executions) {
             
             // On ajoute les autres stratégies qui ne sont NI pc NI ccs
             strats.forEach(s => {
-                if (s !== pcs && s !== ccs) mappedStrategies.push(s);
+                if (s !== pcs && s !== ccs) {
+                   mappedStrategies.push(finalNormalizer(s));
+                }
             });
 
         } else {
             strats.forEach(s => {
-                mappedStrategies.push(s);
+                mappedStrategies.push(finalNormalizer(s));
             });
         }
     });
 
+    function finalNormalizer(strat) {
+        let name = strat.detectedStrategy;
+        
+        // RÈGLE 3 : PCS STANDARD (Normalisation finale pour le frontend Journal)
+        if (name === 'Put Credit Spread' || name === 'Call Credit Spread' || name === 'Call Debit Spread' || name === 'Put Debit Spread' || name === 'Vertical Spread') {
+            name = 'pcs standard'; // minuscule comme demandé
+        }
+
+        // RÈGLE 4 : CONVERSION DEVISE
+        if (name === STRATEGIES.UNKNOWN && (strat.assetType === 'CASH' || (strat.symbol && strat.symbol.includes('.')))) {
+            name = 'Change devise';
+        }
+
+        return { ...strat, detectedStrategy: name };
+    }
+
     return mappedStrategies.sort((a, b) => parseFrDate(b.date) - parseFrDate(a.date));
+}
+
+/**
+ * Détecte les événements d'assignation ou d'exercice dans les transactions IBKR
+ * Un code 'A' dans les notes signifie généralement Assignation.
+ * Un code 'Ex' signifie Exercice.
+ */
+export function extractAssignments(executions) {
+    const assignments = [];
+    
+    executions.forEach(exec => {
+        const notes = (exec.notes || '').toUpperCase();
+        const side = (exec.side || '').toUpperCase();
+        
+        // Code 'A' = Assignment, 'Ex' = Exercise
+        // IBKR combine souvent codes like 'A;P', 'Ex;C'
+        const isAssignment = notes.includes('A') || (exec.description && exec.description.toLowerCase().includes('assign'));
+        const isExercise = notes.includes('EX') || (exec.description && exec.description.toLowerCase().includes('exerc'));
+
+        if ((isAssignment || isExercise) && exec.assetType === 'OPT') {
+            assignments.push({
+                symbol: exec.symbol,
+                date: exec.date,
+                quantity: Math.abs(exec.quantity),
+                price: exec.strike || exec.price,
+                type: isAssignment ? (exec.type === 'P' ? 'PUT_ASSIGNMENT' : 'CALL_ASSIGNMENT') : 'EXERCISE',
+                ib_trade_id: exec.id,
+                underlying: exec.underlying
+            });
+        }
+    });
+    
+    return assignments;
 }

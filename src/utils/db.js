@@ -62,6 +62,7 @@ export async function initDB() {
   try { await db.execute("ALTER TABLE trades ADD COLUMN entry_executed REAL"); } catch(e) {}
   try { await db.execute("ALTER TABLE trades ADD COLUMN exit_price REAL"); } catch(e) {}
   try { await db.execute("ALTER TABLE trades ADD COLUMN exit_date TEXT"); } catch(e) {}
+  try { await db.execute("ALTER TABLE trades ADD COLUMN is_deleted INTEGER DEFAULT 0"); } catch(e) {}
 
   // Add open_date to legs to track assignment dates separately
   try { await db.execute("ALTER TABLE legs ADD COLUMN open_date TEXT"); } catch(e) {}
@@ -123,6 +124,7 @@ export async function initDB() {
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_ib_trade_id ON rocket_trades_history(ib_trade_id)"); } catch(e) {}
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_strategy ON rocket_trades_history(strategy)"); } catch(e) {}
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_symbol ON rocket_trades_history(symbol)"); } catch(e) {}
+  try { await db.execute("ALTER TABLE rocket_trades_history ADD COLUMN is_deleted INTEGER DEFAULT 0"); } catch(e) {}
 
   // Sync metadata
   await db.execute(`
@@ -133,6 +135,32 @@ export async function initDB() {
       next_sync_date TEXT,
       account_id TEXT,
       UNIQUE(account_id)
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT,
+      record_id TEXT,
+      action TEXT,
+      old_value TEXT,
+      new_value TEXT,
+      timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      wheel_trade_id INTEGER,
+      symbol TEXT NOT NULL,
+      assignment_date TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      price REAL NOT NULL,
+      type TEXT CHECK(type IN ('PUT_ASSIGNMENT', 'CALL_ASSIGNMENT')),
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(wheel_trade_id) REFERENCES trades(id) ON DELETE SET NULL
     )
   `);
 

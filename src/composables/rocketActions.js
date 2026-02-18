@@ -195,6 +195,24 @@ export const useRocketActions = () => {
         } catch(e) {}
     }
 
+    async function updateClosedTrade(tradeId, exitDate, exitPrice, profitLoss) {
+        try {
+            await db.value.execute(
+                `UPDATE trades SET exit_date = ?, exit_price = ?, profit_loss = ? WHERE id = ?`,
+                [exitDate, exitPrice, profitLoss, tradeId]
+            );
+        } catch(e) {}
+    }
+
+    async function updateClosedTrade(tradeId, exitDate, exitPrice, profitLoss) {
+        try {
+            await db.value.execute(
+                `UPDATE trades SET exit_date = ?, exit_price = ?, profit_loss = ? WHERE id = ?`,
+                [exitDate, exitPrice, profitLoss, tradeId]
+            );
+        } catch(e) {}
+    }
+
     async function deleteTrade(trade) { tradeToDelete.value = trade; showDeleteModal.value = true; }
     async function confirmDeleteTrade() {
         if (!tradeToDelete.value) return;
@@ -246,7 +264,7 @@ export const useRocketActions = () => {
     return {
         init, loadAccountData, loadActiveTrades, saveMMSettings, updateTotalCapital,
         assignTrade, confirmAssignment, updateStatus, confirmStatusUpdate, onTradeSubmitted, deleteTrade, confirmDeleteTrade,
-        updateTradeDate, updateTradeQuantity, updateTrailingStop, activateTrade, neutralizeTrade, closeTrade,
+        updateTradeDate, updateTradeQuantity, updateTrailingStop, activateTrade, neutralizeTrade, closeTrade, updateClosedTrade,
         fetchHistory
     };
 };
