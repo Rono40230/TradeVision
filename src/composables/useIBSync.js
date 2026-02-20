@@ -107,7 +107,7 @@ export function useIBSync() {
         // Priorité override : paramètre > déjà en DB > auto-détection
         const strategy = strategyOverrides[t.trade_id] ?? existingStrategies[t.trade_id] ?? detectStrategy(t);
         try {
-          await db.execute(
+          const res = await db.execute(
             `INSERT OR IGNORE INTO flex_trades
              (trade_id, account_id, symbol, asset_class, side, quantity, multiplier,
               price, commission, realized_pnl, date, time, expiry, strike, put_call,
@@ -121,7 +121,9 @@ export function useIBSync() {
               strategy
             ]
           );
-          savedCount++;
+          // rowsAffected = 0 si INSERT OR IGNORE a ignoré un doublon
+          if (res.rowsAffected > 0) savedCount++;
+          else skippedCount++;
         } catch (e) {
           console.warn(`[FlexSync] Could not save trade ${t.trade_id}:`, e.message);
         }
@@ -180,7 +182,7 @@ export function useIBSync() {
 
         const strategy = strategyOverrides[t.trade_id] ?? existingStrategies[t.trade_id] ?? detectStrategy(t);
         try {
-          await db.execute(
+          const res = await db.execute(
             `INSERT OR IGNORE INTO flex_trades
              (trade_id, account_id, symbol, asset_class, side, quantity, multiplier,
               price, commission, realized_pnl, date, time, expiry, strike, put_call,
@@ -194,7 +196,9 @@ export function useIBSync() {
               t.notes ?? null, strategy
             ]
           );
-          savedCount++;
+          // rowsAffected = 0 si INSERT OR IGNORE a ignoré un doublon
+          if (res.rowsAffected > 0) savedCount++;
+          else skippedCount++;
         } catch (e) {
           console.warn(`[CSVSync] Could not save trade ${t.trade_id}:`, e.message);
         }

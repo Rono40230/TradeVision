@@ -125,6 +125,7 @@ import { useIBSync } from '../composables/useIBSync.js'
 import { initDB } from '../utils/db.js'
 import { invoke } from '@tauri-apps/api/core'
 import FlexTradesTable from './FlexTradesTable.vue'
+import { histRefreshToken } from '../composables/useHistoriqueRefresh.js'
 
 const {
   trades,
@@ -154,6 +155,8 @@ const saveToDb = async () => {
         ? `Déjà à jour (${already} trades en DB)`
         : `✅ ${result.count} nouveaux trades sauvés${already > 0 ? ` (${already} déjà présents)` : ''}`
       saveSuccess.value = true
+      // Notifier HistoriqueComplet de se rafraîchir
+      if (result.count > 0) histRefreshToken.value++
       setTimeout(() => { saveSuccess.value = false; saveMsg.value = '' }, 5000)
     }
   } catch (err) {

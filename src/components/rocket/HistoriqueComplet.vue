@@ -55,12 +55,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useIBSync } from '../../composables/useIBSync'
 import { useFlexQueries } from '../../composables/useFlexQueries.js'
 import { buildGroups } from '../../composables/useTradeGrouping.js'
 import { initDB } from '../../utils/db'
 import FlexTradesTable from '../FlexTradesTable.vue'
+import { histRefreshToken } from '../../composables/useHistoriqueRefresh.js'
 
 // State
 const trades = ref([])
@@ -139,6 +140,11 @@ const formatCurrency = (value) =>
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(async () => {
+  await loadTrades()
+})
+
+// Rechargement automatique quand FlexQueryAnalytics sauvegarde de nouveaux trades
+watch(histRefreshToken, async () => {
   await loadTrades()
 })
 </script>
