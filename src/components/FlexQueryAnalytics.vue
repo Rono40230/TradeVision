@@ -25,7 +25,10 @@
           {{ loading ? '⏳' : '🔄' }} {{ loading ? 'Chargement...' : 'Récupérer' }}
         </button>
       </div>
-
+        <button @click="triggerCsvImport" class="btn btn-secondary" title="Importer un CSV exporté manuellement depuis IBKR">
+          📂 Importer CSV
+        </button>
+        <input ref="csvFileInput" type="file" accept=".csv" style="display:none" @change="onCsvFileSelected" />
       <button @click="toggleCredentials" class="btn-toggle">
         {{ showCredentials ? '🔒' : '🔓' }}
       </button>
@@ -96,27 +99,8 @@
         </div>
       </div>
 
-      <!-- Stratégie + Mensuel côte à côte -->
+      <!-- Mensuel -->
       <div class="bottom-row">
-        <div v-if="byStrategy && byStrategy.length > 0" class="strategy-analysis">
-          <h3>Par stratégie</h3>
-          <div class="strategy-grid">
-            <div v-for="strat in byStrategy" :key="strat.name" class="strategy-card">
-              <h4>{{ strat.name }}</h4>
-              <div class="strat-metrics">
-                <div class="strat-pnl" :class="{ positive: strat.pnl >= 0, negative: strat.pnl < 0 }">
-                  ${{ strat.pnl }}
-                </div>
-                <div class="strat-sub">
-                  <span>{{ strat.tradesCount }} trades</span>
-                  <span>WR: {{ strat.winRate }}%</span>
-                  <span>ROI: {{ strat.roi }}%</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div v-if="monthlyPL && monthlyPL.length > 0" class="monthly-breakdown">
           <h3>Par mois</h3>
           <div class="monthly-list">
@@ -130,9 +114,11 @@
           </div>
         </div>
       </div>
+
+      <!-- Table des trades avec stratégie manuelle -->
+      <FlexTradesTable :trades="trades" :overrides="strategyOverrides" />
     </div>
     <div v-else-if="!loading" class="empty-state">
-      <div class="empty-icon">📊</div>
       <p>Configurez vos identifiants IBKR et cliquez sur "Récupérer les trades" pour voir vos analyses.</p>
     </div>
   </div>
@@ -142,12 +128,15 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useFlexQueries } from '../composables/useFlexQueries.js'
 import { useAnalytics } from '../composables/useAnalytics.js'
+import { invoke } from '@tauri-apps/api/core'
+import FlexTradesTable from './FlexTradesTable.vue'
 
 const {
   trades,
   loading,
   error: fetchError,
-  fetchFlexTrades: fetchFlexTradesApi
+  fetchFlexTrades: fetchFlexTradesApi,
+  strategyOverrides
 } = useFlexQueries()
 
 // Advanced Analytics
@@ -186,6 +175,57 @@ const fetchTrades = async () => {
 
 const toggleCredentials = () => {
   showCredentials.value = !showCredentials.value
+}
+
+// Import CSV local
+const csvFileInput = ref(null)
+
+const triggerCsvImport = () => {
+  csvFileInput.value?.click()
+}
+
+const onCsvFileSelected = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const rawTrades = await invoke('parse_flex_trades_csv', { csvContent: text })
+    trades.value = (rawTrades || []).map(t => {
+      const isOption = t.asset_class === 'OPT' || /\d{6}[CP]\d+/.test(t.symbol)
+      const isCall   = /\d{6}C\d+/.test(t.symbol) || t.put_call === 'C'
+      let strategy = 'Rockets'
+      if (isOption) {
+        const sell = t.side === 'SELL'
+        strategy = isCall ? (sell ? 'Naked Call' : 'Long Call') : (sell ? 'Naked Put' : 'Long Put')
+      }
+      return {
+        trade_id:     t.trade_id,
+        symbol:       t.symbol,
+        asset_class:  t.asset_class || '',
+        side:         t.side,
+        quantity:     t.quantity,
+        multiplier:   t.multiplier || 1,
+        price:        t.price,
+        commission:   t.commission,
+        realized_pnl: t.realized_pnl || 0,
+        date:         t.date,
+        expiry:       t.expiry || '',
+        strike:       t.strike || 0,
+        put_call:     t.put_call || '',
+        open_close:   t.open_close || '',
+        exchange:     t.exchange || '',
+        proceeds:     t.proceeds || 0,
+        cost_basis:   t.cost_basis || 0,
+        notes:        t.notes || '',
+        strategy,
+      }
+    })
+    // Reset file input pour pouvoir re-sélectionner le même fichier
+    event.target.value = ''
+  } catch (err) {
+    fetchError.value = err.toString()
+  }
 }
 </script>
 
@@ -366,6 +406,17 @@ const toggleCredentials = () => {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-secondary:hover {
+  background: #545b62;
 }
 
 .btn-toggle {

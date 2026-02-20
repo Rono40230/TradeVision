@@ -72,7 +72,12 @@ export function useIBSyncScheduler() {
       const { syncFromIB } = useIBSync()
 
       // Use useIBSync to handle the actual sync (which calls invoke internally)
-      await syncFromIB(db, accountId)
+      const flexToken = localStorage.getItem('flex_token')
+      const flexQueryId = parseInt(localStorage.getItem('flex_query_id') || '0')
+      if (!flexToken || !flexQueryId) {
+        throw new Error('Flex Token et Query ID non configurés dans HISTORIQUE IB')
+      }
+      await syncFromIB(db, flexToken, flexQueryId)
 
       // Get metadata after sync
       const metadata = await db.select(

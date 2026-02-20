@@ -111,6 +111,7 @@ pub fn run() {
             fetch_market_quotes,
             fetch_ib_trades,
             fetch_flex_trades,
+            parse_flex_trades_csv,
             fetch_positions,
             create_backup
         ])
@@ -131,6 +132,16 @@ async fn fetch_positions() -> Result<Vec<modules::tws_socket::Position>, String>
     let config = modules::tws_socket::TWSConfig::default();
     let client = modules::tws_socket::TWSSyncClient::new(config);
     client.get_positions().await
+}
+
+/// Commande Tauri: Parse un CSV Flex Query fourni en string (import fichier local)
+#[tauri::command]
+async fn parse_flex_trades_csv(
+    csv_content: String,
+) -> Result<Vec<modules::tws_socket::FlexTrade>, String> {
+    let config = modules::tws_socket::TWSConfig::default();
+    let client = modules::tws_socket::TWSSyncClient::new(config);
+    client.parse_csv_public(csv_content).await
 }
 
 /// Commande Tauri: Récupère l'historique complet via Flex Query (NOUVEAU - Socket TCP + Flex)

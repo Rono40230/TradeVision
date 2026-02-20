@@ -177,6 +177,3 @@ const modalTitle = computed(() => {
 </script>
 
 <style scoped src="../components/dashboard/dashboard-layout.css"></style>
-
-<style scoped>
-</style>

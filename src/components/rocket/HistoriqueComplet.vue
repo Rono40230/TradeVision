@@ -156,6 +156,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useIBSync } from '../../composables/useIBSync'
+import { useFlexQueries } from '../../composables/useFlexQueries.js'
 import { initDB } from '../../utils/db'
 import ConfirmationModal from '../common/ConfirmationModal.vue'
 import { exportToCSV } from '../../utils/exporters.js'
@@ -173,6 +174,7 @@ const tradeToDelete = ref(null)
 
 // Sync composable
 const { isSyncing, lastSyncTime, syncError, tradesCount, syncFromIB, recalculateAllStrategies } = useIBSync()
+const { strategyOverrides } = useFlexQueries()
 
 // DB reference
 let db = null
@@ -276,8 +278,13 @@ const handleSync = async () => {
     if (!db) {
       db = await initDB()
     }
-    // Call sync via composable (which internally handles Rust invocation)
-    await syncFromIB(db, 'IBKR')
+    const flexToken = localStorage.getItem('flex_token')
+    const flexQueryId = parseInt(localStorage.getItem('flex_query_id') || '0')
+    if (!flexToken || !flexQueryId) {
+      localError.value = 'Flex Token et Query ID non configurés. Renseignez-les dans la page HISTORIQUE IB.'
+      return
+    }
+    await syncFromIB(db, flexToken, flexQueryId, strategyOverrides.value)
     // Reload trades from DB after sync
     await loadTrades()
   } catch (error) {

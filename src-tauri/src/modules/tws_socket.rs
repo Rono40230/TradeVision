@@ -54,13 +54,23 @@ pub struct FlexTrade {
     pub account_id: String,
     pub trade_id: String,
     pub symbol: String,
-    pub side: String, // BUY/SELL
+    pub asset_class: String,  // STK | OPT | FUT | CASH
+    pub side: String,          // BUY/SELL
     pub quantity: i32,
+    pub multiplier: i32,
     pub price: f64,
     pub commission: f64,
     pub realized_pnl: f64,
     pub date: String,
     pub time: String,
+    pub expiry: String,        // YYYY-MM-DD ou "" pour stocks
+    pub strike: f64,           // 0.0 pour stocks
+    pub put_call: String,      // "P", "C" ou ""
+    pub open_close: String,    // "O" ou "C"
+    pub exchange: String,
+    pub proceeds: f64,
+    pub cost_basis: f64,
+    pub notes: String,
 }
 
 /// Réponse Flex Query
@@ -118,7 +128,7 @@ struct FlexTradeRaw {
 
 /// Client pour accéder à TWS via socket TCP + Flex Queries
 pub struct TWSSyncClient {
-    config: TWSConfig,
+    _config: TWSConfig,
     http_client: HttpClient,
 }
 
@@ -126,7 +136,7 @@ impl TWSSyncClient {
     /// Crée un nouveau client TWS
     pub fn new(config: TWSConfig) -> Self {
         Self {
-            config,
+            _config: config,
             http_client: HttpClient::builder()
                 .timeout(Duration::from_secs(30))
                 .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -183,6 +193,11 @@ impl TWSSyncClient {
     /// Récupère l'historique complet via Flex Query (2 étapes avec retry)
     /// ✅ IMPLÉMENTÉ - Utilise l'API HTTP officielle IBKR
     /// 🔄 AUTO-RETRY: Max 5 tentatives avec délai de 3s entre chaque (error 1019)
+    /// API publique: parse un CSV fourni en string (import fichier local)
+    pub async fn parse_csv_public(&self, csv_content: String) -> Result<Vec<FlexTrade>, String> {
+        self.parse_flex_csv(csv_content).await
+    }
+
     pub async fn get_flex_trades(
         &self,
         flex_token: &str,
@@ -219,7 +234,9 @@ impl TWSSyncClient {
         Err("[RETRY FAILED] Max retries (5) reached. IBKR statement still generating. Wait 30s and try again.".to_string())
     }
 
-    /// Une seule tentative de Flex Query
+    /// Flux officiel IBKR Flex Web Service (2 étapes)
+    /// Étape 1: SendRequest → ReferenceCode
+    /// Étape 2: GetStatement avec ReferenceCode → données
     async fn fetch_flex_trades_single(
         &self,
         flex_token: &str,
@@ -227,29 +244,57 @@ impl TWSSyncClient {
     ) -> Result<Vec<FlexTrade>, String> {
         let base_url = "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService";
 
-        // APPROCHE DIRECTE: GetStatement avec QueryID (le rapport pré-généré)
-        // Au lieu de SendRequest qui crée une nouvelle demande de génération
-        let get_statement_url = format!(
-            "{}/GetStatement?t={}&q={}&v=3",
+        // ── Étape 1 : SendRequest → obtenir le ReferenceCode ──────────────
+        let send_url = format!(
+            "{}/SendRequest?t={}&q={}&v=3",
             base_url, flex_token, query_id
         );
-        eprintln!("[Flex Query] GetStatement (direct with QueryID)");
+        eprintln!("[Flex Query] Étape 1: SendRequest pour queryId={}", query_id);
+
+        let send_response = self
+            .http_client
+            .get(&send_url)
+            .header("User-Agent", "TradeVision/1.0")
+            .send()
+            .await
+            .map_err(|e| format!("SendRequest HTTP error: {}", e))?;
+
+        if !send_response.status().is_success() {
+            let status = send_response.status();
+            let body = send_response.text().await.unwrap_or_default();
+            return Err(format!("SendRequest failed: {} - {}", status, body));
+        }
+
+        let send_body = send_response.text().await.map_err(|e| e.to_string())?;
+        eprintln!("[Flex Query] SendRequest response: {}", &send_body[..send_body.len().min(500)]);
+
+        // Vérifier que SendRequest a réussi
+        if send_body.contains("<Status>Fail</Status>") || send_body.contains("ErrorCode") {
+            return Err(format!("SendRequest rejected: {}", send_body));
+        }
+
+        // Extraire le ReferenceCode
+        let reference_code = self.extract_reference_code(&send_body)?;
+        eprintln!("[Flex Query] ReferenceCode obtenu: {}", reference_code);
+
+        // ── Pause : laisser IBKR générer le rapport (recommandé 10s) ──────
+        eprintln!("[Flex Query] Attente 10s pour la génération du rapport...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+        // ── Étape 2 : GetStatement avec ReferenceCode ─────────────────────
+        let get_url = format!(
+            "{}/GetStatement?t={}&q={}&v=3",
+            base_url, flex_token, reference_code
+        );
+        eprintln!("[Flex Query] Étape 2: GetStatement avec ReferenceCode={}", reference_code);
 
         let get_response = self
             .http_client
-            .get(&get_statement_url)
+            .get(&get_url)
+            .header("User-Agent", "TradeVision/1.0")
             .send()
             .await
-            .map_err(|e| {
-                eprintln!("[Flex Query] GetStatement HTTP Error: {}", e);
-                format!("GetStatement failed: {}", e)
-            })?;
-
-        let get_status = get_response.status();
-        if !get_status.is_success() {
-            let body = get_response.text().await.unwrap_or_default();
-            return Err(format!("GetStatement failed: {} - {}", get_status, body));
-        }
+            .map_err(|e| format!("GetStatement HTTP error: {}", e))?;
 
         let content_type = get_response
             .headers()
@@ -258,17 +303,30 @@ impl TWSSyncClient {
             .unwrap_or("text/xml")
             .to_string();
 
+        if !get_response.status().is_success() {
+            let status = get_response.status();
+            let body = get_response.text().await.unwrap_or_default();
+            return Err(format!("GetStatement failed: {} - {}", status, body));
+        }
+
         let get_body = get_response.text().await.map_err(|e| e.to_string())?;
-        
-        // 🚨 Vérifier Error 1019 AVANT de parser
+
+        // Vérifier error 1019 (rapport encore en cours de génération)
         if get_body.contains("1019") {
             return Err("1019: Statement generation in progress".to_string());
         }
-        
-        // Parser selon le format (JSON, XML ou CSV)
+
+        eprintln!("[Flex Query] GetStatement response ({} chars, type: {})", get_body.len(), content_type);
+
+        // Parser selon le format retourné
         if content_type.contains("json") {
             self.parse_flex_json(get_body).await
-        } else if get_body.lines().next().map(|l| l.contains(',')) == Some(true) {
+        } else if get_body.trim_start().starts_with('{') {
+            eprintln!("[Flex Query] Format: JSON (détecté par contenu)");
+            self.parse_flex_json(get_body).await
+        } else if get_body.lines().next().map(|l| l.contains(',')) == Some(true)
+            && !get_body.trim_start().starts_with('<')
+        {
             eprintln!("[Flex Query] Format: CSV");
             self.parse_flex_csv(get_body).await
         } else {
@@ -313,13 +371,23 @@ impl TWSSyncClient {
                                                     account_id: trade.account_id,
                                                     trade_id: trade.trade_id,
                                                     symbol: trade.symbol,
+                                                    asset_class: String::new(),
                                                     side: trade.side,
                                                     quantity: trade.quantity,
+                                                    multiplier: 1,
                                                     price: trade.price,
                                                     commission: trade.commission,
                                                     realized_pnl: trade.realized_pnl,
                                                     date: trade.date,
                                                     time: trade.time,
+                                                    expiry: String::new(),
+                                                    strike: 0.0,
+                                                    put_call: String::new(),
+                                                    open_close: String::new(),
+                                                    exchange: String::new(),
+                                                    proceeds: 0.0,
+                                                    cost_basis: 0.0,
+                                                    notes: String::new(),
                                                 });
                                             }
                                         }
@@ -335,66 +403,107 @@ impl TWSSyncClient {
         Ok(trades)
     }
 
-    /// Parser Flex Query en XML (format simple avec regex)
+    /// Parser Flex Query en XML (format IBKR Activity ou Trade Confirmation)
     async fn parse_flex_xml(&self, xml_str: String) -> Result<Vec<FlexTrade>, String> {
-        eprintln!("[Rust] XML Response (first 1000 chars):\n{}", &xml_str[..std::cmp::min(1000, xml_str.len())]);
+        // Log des 2000 premiers chars pour debug
+        println!("[Flex XML] Réponse brute ({} chars): {}", xml_str.len(), &xml_str[..xml_str.len().min(2000)]);
         
         let mut trades = Vec::new();
 
-        // Parser simple avec regex pour extraire les <Trade> éléments
-        let trade_regex = regex::Regex::new(r"<Trade\s+([^>]*)>").unwrap();
+        // IBKR Activity Flex Query  : <Trade .../>
+        // IBKR Trade Confirmation   : <TradeConfirm .../>
+        // Les deux formats sont supportés
+        let trade_regex = regex::Regex::new(r"(?s)<(?:Trade|TradeConfirm)\s+([^/]*/?)>").unwrap();
         
-        eprintln!("[Rust] Searching for <Trade> elements...");
-        let cap_count = trade_regex.captures_iter(&xml_str).count();
-        eprintln!("[Rust] Found {} <Trade> elements", cap_count);
-        
-        for cap in trade_regex.captures_iter(&xml_str) {
+        let all_matches: Vec<_> = trade_regex.captures_iter(&xml_str).collect();
+        println!("[Flex XML] Éléments <Trade>/<TradeConfirm> trouvés: {}", all_matches.len());
+
+        for cap in all_matches {
             let attrs = &cap[1];
-            eprintln!("[Rust] Trade attributes: {}", attrs);
             
-            // Extraire les attributs XML
             let mut trade = FlexTrade {
                 account_id: String::new(),
                 trade_id: String::new(),
                 symbol: String::new(),
+                asset_class: String::new(),
                 side: String::new(),
                 quantity: 0,
+                multiplier: 1,
                 price: 0.0,
                 commission: 0.0,
                 realized_pnl: 0.0,
                 date: String::new(),
                 time: String::new(),
+                expiry: String::new(),
+                strike: 0.0,
+                put_call: String::new(),
+                open_close: String::new(),
+                exchange: String::new(),
+                proceeds: 0.0,
+                cost_basis: 0.0,
+                notes: String::new(),
             };
 
-            // Parser les attributs
+            // Attributs IBKR officiels (Activity Flex Query)
             self.extract_xml_attr(attrs, "accountId", &mut trade.account_id);
-            self.extract_xml_attr(attrs, "tradeID", &mut trade.trade_id);
-            self.extract_xml_attr(attrs, "symbol", &mut trade.symbol);
-            self.extract_xml_attr(attrs, "side", &mut trade.side);
             
+            // tradeID (Activity) ou tradeId
+            if trade.trade_id.is_empty() { self.extract_xml_attr(attrs, "tradeID", &mut trade.trade_id); }
+            if trade.trade_id.is_empty() { self.extract_xml_attr(attrs, "tradeId", &mut trade.trade_id); }
+            
+            self.extract_xml_attr(attrs, "symbol", &mut trade.symbol);
+            
+            // buySell (Activity) ou side
+            if trade.side.is_empty() { self.extract_xml_attr(attrs, "buySell", &mut trade.side); }
+            if trade.side.is_empty() { self.extract_xml_attr(attrs, "side", &mut trade.side); }
+            if trade.side.is_empty() { self.extract_xml_attr(attrs, "buy/sell", &mut trade.side); }
+
             if let Ok(qty) = self.extract_xml_attr_as_int(attrs, "quantity") {
                 trade.quantity = qty;
             }
-            if let Ok(price) = self.extract_xml_attr_as_float(attrs, "price") {
-                trade.price = price;
+            
+            // tradePrice (Activity) ou price
+            if trade.price == 0.0 {
+                if let Ok(p) = self.extract_xml_attr_as_float(attrs, "tradePrice") { trade.price = p; }
             }
-            if let Ok(comm) = self.extract_xml_attr_as_float(attrs, "ibCommission") {
-                trade.commission = comm;
+            if trade.price == 0.0 {
+                if let Ok(p) = self.extract_xml_attr_as_float(attrs, "price") { trade.price = p; }
             }
-            if let Ok(pnl) = self.extract_xml_attr_as_float(attrs, "realizedPnL") {
-                trade.realized_pnl = pnl;
-            }
-            self.extract_xml_attr(attrs, "tradeDate", &mut trade.date);
-            self.extract_xml_attr(attrs, "tradeTime", &mut trade.time);
 
-            eprintln!("[Rust] Parsed trade: {} {} {} {}", trade.trade_id, trade.symbol, trade.side, trade.quantity);
+            // ibCommission
+            if let Ok(c) = self.extract_xml_attr_as_float(attrs, "ibCommission") { trade.commission = c; }
+
+            // fifoPnlRealized (Activity) ou realizedPnL ou mtmPnlRealized
+            if let Ok(pnl) = self.extract_xml_attr_as_float(attrs, "fifoPnlRealized") { trade.realized_pnl = pnl; }
+            if trade.realized_pnl == 0.0 {
+                if let Ok(pnl) = self.extract_xml_attr_as_float(attrs, "realizedPnL") { trade.realized_pnl = pnl; }
+            }
+
+            // dateTime (Activity: "YYYYMMDD;HHmmss") ou tradeDate
+            let mut datetime = String::new();
+            self.extract_xml_attr(attrs, "dateTime", &mut datetime);
+            if !datetime.is_empty() {
+                // Format IBKR: "20240115;143022" → date="20240115", time="143022"
+                if let Some((d, t)) = datetime.split_once(';') {
+                    trade.date = d.to_string();
+                    trade.time = t.to_string();
+                } else {
+                    trade.date = datetime;
+                }
+            } else {
+                self.extract_xml_attr(attrs, "tradeDate", &mut trade.date);
+                self.extract_xml_attr(attrs, "tradeTime", &mut trade.time);
+            }
+
+            println!("[Flex XML] Trade parsé: id={} sym={} side={} qty={} price={} pnl={} date={}",
+                trade.trade_id, trade.symbol, trade.side, trade.quantity, trade.price, trade.realized_pnl, trade.date);
 
             if !trade.symbol.is_empty() {
                 trades.push(trade);
             }
         }
 
-        eprintln!("[Rust] Parsed {} trades from XML", trades.len());
+        println!("[Flex XML] Total trades parsés: {}", trades.len());
         Ok(trades)
     }
 
@@ -422,70 +531,210 @@ impl TWSSyncClient {
         result.parse::<f64>().map_err(|_| format!("Failed to parse {} as float", key))
     }
 
-    /// Parser Flex Query en CSV
+    /// Parser le CSV Activity Statement IBKR
+    /// Supporte deux formats :
+    ///   - Format web service : multi-sections, chaque section a son "HEADER","TRNT" suivi de "DATA","TRNT"
+    ///   - Format plain CSV   : Col1,Col2,... / val1,val2,...  (export manuel)
     async fn parse_flex_csv(&self, csv_str: String) -> Result<Vec<FlexTrade>, String> {
-        eprintln!("[Rust] Parsing CSV format");
-        
+        println!("[Flex CSV] Parsing Activity Statement CSV IBKR ({} chars)", csv_str.len());
+
         let mut trades = Vec::new();
         let lines: Vec<&str> = csv_str.lines().collect();
-        
-        if lines.is_empty() {
+
+        // Détecter si format HEADER/TRNT ou plain CSV
+        let is_multi_section = lines.iter().any(|l| {
+            let f = Self::parse_csv_line(l);
+            f.first().map(|s| s.to_uppercase() == "HEADER").unwrap_or(false)
+            && f.get(1).map(|s| s.to_uppercase() == "TRNT").unwrap_or(false)
+        });
+
+        if !is_multi_section {
+            // Format plain CSV : première ligne = headers, toutes les lignes suivantes = données
+            let first = match lines.first() {
+                Some(l) => l,
+                None => return Ok(trades),
+            };
+            let cols = Self::parse_csv_line(first);
+            if cols.is_empty() { return Ok(trades); }
+            println!("[Flex CSV] Format détecté: plain CSV (export manuel)");
+            let headers: Vec<String> = cols.iter().map(|s| s.to_lowercase()).collect();
+            println!("[Flex CSV] Colonnes ({}): {:?}", headers.len(), headers);
+            let col_offset = 0usize;
+            let find = |names: &[&str]| -> Option<usize> {
+                for name in names {
+                    if let Some(p) = headers.iter().position(|h| h.contains(name)) {
+                        return Some(p + col_offset);
+                    }
+                }
+                None
+            };
+            let mut data_count = 0usize;
+            for line in lines.iter().skip(1) {
+                let fields = Self::parse_csv_line(line);
+                if fields.is_empty() { continue; }
+                data_count += 1;
+                if let Some(t) = Self::parse_csv_row(&fields, &find, data_count) {
+                    trades.push(t);
+                }
+            }
+            println!("[Flex CSV] plain CSV: {} trades", trades.len());
             return Ok(trades);
         }
 
-        // Première ligne = headers (nettoyés des guillemets)
-        let headers: Vec<String> = lines[0]
-            .split(',')
-            .map(|h| h.trim().trim_matches('"').to_string())
-            .collect();
-        eprintln!("[Rust] CSV Headers: {:?}", headers);
+        // Format multi-sections HEADER/TRNT
+        // On maintient un mapping courant de colonnes et on le met à jour à chaque HEADER,TRNT
+        println!("[Flex CSV] Format détecté: multi-sections HEADER/TRNT (web service)");
+        
+        let mut current_headers: Vec<String> = Vec::new();
+        let mut data_count = 0usize;
 
-        // Trouver les indices des colonnes importantes (case-insensitive)
-        let idx_account = headers.iter().position(|h| h.to_lowercase().contains("accountid") || h.to_lowercase().contains("account"));
-        let idx_trade_id = headers.iter().position(|h| h.to_lowercase().contains("tradeid") || h.to_lowercase().contains("tradenum"));
-        let idx_symbol = headers.iter().position(|h| h.to_lowercase() == "symbol");
-        let idx_side = headers.iter().position(|h| h.to_lowercase() == "buy/sell" || h.to_lowercase() == "side");
-        let idx_qty = headers.iter().position(|h| h.to_lowercase() == "quantity" || h.to_lowercase() == "qty");
-        let idx_price = headers.iter().position(|h| h.to_lowercase() == "tradeprice" || h.to_lowercase() == "price");
-        let idx_comm = headers.iter().position(|h| h.to_lowercase().contains("commission") || h.to_lowercase().contains("ibcommission"));
-        let idx_pnl = headers.iter().position(|h| h.to_lowercase().contains("pnl") || h.to_lowercase().contains("fifopnl"));
-        let idx_date = headers.iter().position(|h| h.to_lowercase().contains("datetime") || h.to_lowercase().contains("date"));
+        for line in &lines {
+            let fields = Self::parse_csv_line(line);
+            if fields.is_empty() { continue; }
 
-        eprintln!("[Rust] Column indices - ID: {:?}, Symbol: {:?}, Side: {:?}, Qty: {:?}, Price: {:?}, Comm: {:?}, PnL: {:?}", 
-                  idx_trade_id, idx_symbol, idx_side, idx_qty, idx_price, idx_comm, idx_pnl);
+            let tag0 = fields.first().map(|s| s.to_uppercase()).unwrap_or_default();
+            let tag1 = fields.get(1).map(|s| s.to_uppercase()).unwrap_or_default();
 
-        // Parser les lignes (skip header)
-        for (line_idx, line) in lines.iter().skip(1).enumerate() {
-            if line.trim().is_empty() {
+            if tag0 == "HEADER" && tag1 == "TRNT" {
+                // Nouvelle section : met à jour le mapping de colonnes (offset 2)
+                current_headers = fields.iter().skip(2).map(|s| s.to_lowercase()).collect();
+                println!("[Flex CSV] Section headers ({}): {:?}", current_headers.len(), &current_headers[..current_headers.len().min(8)]);
                 continue;
             }
 
-            let fields: Vec<String> = line
-                .split(',')
-                .map(|f| f.trim().trim_matches('"').to_string())
-                .collect();
-
-            let trade = FlexTrade {
-                account_id: idx_account.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
-                trade_id: idx_trade_id.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
-                symbol: idx_symbol.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
-                side: idx_side.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
-                quantity: idx_qty.and_then(|i| fields.get(i).and_then(|s| s.parse::<i32>().ok())).unwrap_or(0),
-                price: idx_price.and_then(|i| fields.get(i).and_then(|s| s.parse::<f64>().ok())).unwrap_or(0.0),
-                commission: idx_comm.and_then(|i| fields.get(i).and_then(|s| s.parse::<f64>().ok())).unwrap_or(0.0),
-                realized_pnl: idx_pnl.and_then(|i| fields.get(i).and_then(|s| s.parse::<f64>().ok())).unwrap_or(0.0),
-                date: idx_date.and_then(|i| fields.get(i).map(|s| s.clone())).unwrap_or_default(),
-                time: String::new(), // CSV IBKR n'a pas de time séparé
-            };
-
-            if !trade.symbol.is_empty() {
-                eprintln!("[Rust] CSV Trade {}: {} {} {} {}", line_idx, trade.symbol, trade.side, trade.quantity, trade.realized_pnl);
-                trades.push(trade);
+            if tag0 == "DATA" && tag1 == "TRNT" {
+                if current_headers.is_empty() { continue; }
+                data_count += 1;
+                let headers = &current_headers;
+                let col_offset = 2usize;
+                let find = |names: &[&str]| -> Option<usize> {
+                    for name in names {
+                        if let Some(p) = headers.iter().position(|h| h.contains(name)) {
+                            return Some(p + col_offset);
+                        }
+                    }
+                    None
+                };
+                if let Some(t) = Self::parse_csv_row(&fields, &find, data_count) {
+                    trades.push(t);
+                }
             }
         }
 
-        eprintln!("[Rust] Parsed {} trades from CSV", trades.len());
+        println!("[Flex CSV] multi-section: data_count={}, trades retenus={}", data_count, trades.len());
         Ok(trades)
+    }
+
+    /// Parse une seule ligne DATA en FlexTrade en utilisant la fonction find fournie
+    fn parse_csv_row(fields: &[String], find: &dyn Fn(&[&str]) -> Option<usize>, row_num: usize) -> Option<FlexTrade> {
+        let idx_symbol     = find(&["symbol"]);
+        let idx_qty        = find(&["quantity"]);
+        let idx_price      = find(&["tradeprice", "t. price"]);
+        let idx_comm       = find(&["ibcommission", "comm/fee"]);
+        let idx_pnl        = find(&["fifopnlrealized", "realized p/l", "realized p&l"]);
+        let idx_datetime   = find(&["datetime", "date/time"]);
+        let idx_side       = find(&["buy/sell"]);
+        let idx_asset      = find(&["assetclass"]);
+        let idx_code       = find(&["notes/codes", "notes", "code"]);
+        let idx_strike     = find(&["strike"]);
+        let idx_expiry     = find(&["expiry"]);
+        let idx_putcall    = find(&["put/call"]);
+        let idx_openclose  = find(&["open/closeindicator", "open/close"]);
+        let idx_multiplier = find(&["multiplier"]);
+        let idx_tradeid    = find(&["tradeid", "trade id"]);
+        let idx_exchange   = find(&["exchange"]);
+        let idx_proceeds   = find(&["proceeds"]);
+        let idx_costbasis  = find(&["costbasis", "cost basis"]);
+
+        let symbol = idx_symbol.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default();
+        if symbol.is_empty() { return None; }
+
+        // Ignorer ordres annulés (code contient "Ca")
+        if let Some(ci) = idx_code {
+            if fields.get(ci).map(|c| c.contains("Ca")).unwrap_or(false) { return None; }
+        }
+
+        let get_f = |idx: Option<usize>| -> f64 {
+            idx.and_then(|i| fields.get(i))
+                .map(|s| s.trim().replace(',', "").parse::<f64>().unwrap_or(0.0))
+                .unwrap_or(0.0)
+        };
+
+        let side = idx_side
+            .and_then(|i| fields.get(i))
+            .map(|s| s.trim().to_uppercase())
+            .filter(|s| s == "BUY" || s == "SELL")
+            .unwrap_or_else(|| if get_f(idx_qty) < 0.0 { "SELL".to_string() } else { "BUY".to_string() });
+
+        let quantity = get_f(idx_qty).abs() as i32;
+
+        let raw_dt = idx_datetime.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default();
+        let (date, time) = match raw_dt.find(',') {
+            Some(p) => (raw_dt[..p].trim().to_string(), raw_dt[p+1..].trim().to_string()),
+            None => match raw_dt.find(' ') {
+                Some(p) => (raw_dt[..p].trim().to_string(), raw_dt[p+1..].trim().to_string()),
+                None => (raw_dt, String::new()),
+            },
+        };
+
+        let expiry_raw = idx_expiry.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default();
+        let expiry = if expiry_raw.len() == 8 && expiry_raw.chars().all(|c| c.is_ascii_digit()) {
+            format!("{}-{}-{}", &expiry_raw[..4], &expiry_raw[4..6], &expiry_raw[6..8])
+        } else {
+            expiry_raw
+        };
+
+        let asset_class_str = idx_asset.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default();
+        let multiplier = idx_multiplier.and_then(|i| fields.get(i))
+            .and_then(|s| s.trim().parse::<i32>().ok()).unwrap_or(1);
+
+        Some(FlexTrade {
+            account_id:   String::new(),
+            trade_id:     idx_tradeid
+                .and_then(|i| fields.get(i))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| format!("{}-{}-{}", symbol, date, row_num)),
+            symbol:       symbol.clone(),
+            asset_class:  asset_class_str,
+            side,
+            quantity,
+            multiplier,
+            price:        get_f(idx_price),
+            commission:   get_f(idx_comm).abs(),
+            realized_pnl: get_f(idx_pnl),
+            date,
+            time,
+            expiry,
+            strike:       get_f(idx_strike),
+            put_call:     idx_putcall.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default(),
+            open_close:   idx_openclose.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default(),
+            exchange:     idx_exchange.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default(),
+            proceeds:     get_f(idx_proceeds),
+            cost_basis:   get_f(idx_costbasis),
+            notes:        idx_code.and_then(|i| fields.get(i)).map(|s| s.trim().to_string()).unwrap_or_default(),
+        })
+    }
+
+
+    /// Parse une ligne CSV en respectant les guillemets (champs avec virgules)
+    fn parse_csv_line(line: &str) -> Vec<String> {
+        let mut fields = Vec::new();
+        let mut current = String::new();
+        let mut in_quotes = false;
+
+        for ch in line.chars() {
+            match ch {
+                '"' => in_quotes = !in_quotes,
+                ',' if !in_quotes => {
+                    fields.push(current.trim().to_string());
+                    current = String::new();
+                }
+                _ => current.push(ch),
+            }
+        }
+        fields.push(current.trim().to_string());
+        fields
     }
 }
 

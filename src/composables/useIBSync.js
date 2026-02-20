@@ -51,7 +51,7 @@ export function useIBSync() {
    * @param {number} queryId - Flex Query ID
    * @returns {Promise<{success: boolean, count: number, error?: string}>}
    */
-  async function syncFromIB(db, flexToken, queryId) {
+  async function syncFromIB(db, flexToken, queryId, strategyOverrides = {}) {
     if (isSyncing.value) {
       return { success: false, error: 'Sync already in progress' };
     }
@@ -71,23 +71,30 @@ export function useIBSync() {
       }
 
       // 2. Mapper au format attendu par le détecteur de stratégies
-      const mappedExecutions = rawTrades.map(t => ({
-        id: t.tradeId,
-        date: t.openDate,
-        symbol: t.symbol,
-        assetType: t.assetClass === 'STOCK' ? 'STK' : (t.assetClass === 'OPTION' ? 'OPT' : t.assetClass),
-        side: t.side,
-        quantity: t.quantity,
-        price: t.price,
-        commission: t.commission,
-        realizedPnl: t.realizedPnl || 0,
-        unrealizedPnl: t.unrealizedPnl || 0,
-        strike: t.strike,
-        expiry: t.expiry,
-        type: t.symbol.includes('C') && t.assetClass === 'OPTION' ? 'C' : (t.symbol.includes('P') && t.assetClass === 'OPTION' ? 'P' : null),
-        description: t.symbol,
-        proceeds: (t.price * t.quantity * (t.assetClass === 'OPTION' ? 100 : 1)) * -1 // Approximation proceeds
-      }));
+      // Note: le backend Rust retourne les champs en snake_case (trade_id, realized_pnl, etc.)
+      // Heuristique asset type: le format OCC option est "SYMBOL YYMMDD[CP]STRIKE" (>10 chars avec chiffres)
+      const mappedExecutions = rawTrades.map(t => {
+        const isOption = /\d{6}[CP]\d+/.test(t.symbol)
+        const isCall = /\d{6}C\d+/.test(t.symbol)
+        const multiplier = isOption ? 100 : 1
+        return {
+          id: t.trade_id,
+          date: t.date,
+          symbol: t.symbol,
+          assetType: isOption ? 'OPT' : 'STK',
+          side: t.side,
+          quantity: t.quantity,
+          price: t.price,
+          commission: t.commission,
+          realizedPnl: t.realized_pnl || 0,
+          unrealizedPnl: 0,
+          strike: null,
+          expiry: null,
+          type: isOption ? (isCall ? 'C' : 'P') : null,
+          description: t.symbol,
+          proceeds: (t.price * t.quantity * multiplier) * -1
+        }
+      });
 
       // 3. Détecter les stratégies (regroupement par date/symbol)
       const strategies = detectStrategies(mappedExecutions);
@@ -104,12 +111,14 @@ export function useIBSync() {
         if (strat.legs && strat.legs.length > 0) {
           // C'est une stratégie complexe (Spread, IC, etc.)
           for (const leg of strat.legs) {
-            const success = await saveSingleTrade(db, leg, strat.detectedStrategy);
+            const overriddenStrategy = strategyOverrides[leg.id] ?? strat.detectedStrategy;
+            const success = await saveSingleTrade(db, leg, overriddenStrategy);
             if (success) savedCount++;
           }
         } else {
           // C'est un trade simple
-          const success = await saveSingleTrade(db, strat, strat.detectedStrategy);
+          const overriddenStrategy = strategyOverrides[strat.id] ?? strat.detectedStrategy;
+          const success = await saveSingleTrade(db, strat, overriddenStrategy);
           if (success) savedCount++;
         }
       }
