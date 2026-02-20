@@ -1,0 +1,179 @@
+.flex-trades-table-wrapper {
+  margin-top: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.table-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #f0f4f8;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.trade-count {
+  font-size: 0.82rem;
+  color: #555;
+  white-space: nowrap;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 220px;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.trades-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.trades-table th {
+  position: sticky;
+  top: 0;
+  background: #1e2a38;
+  color: #e8eaf0;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: nowrap;
+  z-index: 1;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.trades-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.trades-table th.sortable:hover {
+  background: #2c3e54;
+}
+
+.sort-icon {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  margin-left: 3px;
+}
+
+.trades-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap;
+  color: #111;
+}
+
+/* Ligne groupe (résumé position) */
+.group-row {
+  cursor: pointer;
+  background: #f4f8fd;
+  border-top: 2px solid #d0dce8;
+}
+
+.group-row:hover {
+  background: #e8f1fb;
+}
+
+.group-row.is-expanded {
+  background: #e2edf8;
+}
+
+/* Ligne sous-leg */
+.leg-row {
+  background: #fafafa;
+}
+
+.leg-row:hover {
+  background: #f0f5ff;
+}
+
+.leg-row td {
+  font-size: 0.75rem;
+  color: #444;
+  border-bottom: 1px solid #ebebeb;
+}
+
+.row-option {
+  background: #fffff5;
+}
+
+.row-win { border-left: 3px solid #1a7f4b; }
+.row-loss { border-left: 3px solid #c0392b; }
+
+.expand-col {
+  width: 20px;
+  text-align: center;
+  color: #777;
+  font-size: 0.7rem;
+  padding: 4px 4px;
+}
+
+.leg-indent {
+  color: #aaa;
+  font-size: 0.8rem;
+}
+
+.symbol-cell {
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.leg-symbol {
+  font-weight: 400;
+  font-family: monospace;
+  font-size: 0.72rem;
+}
+
+.side-buy   { color: #1a7f4b; font-weight: 600; }
+.side-sell  { color: #c0392b; font-weight: 600; }
+.side-mixed { color: #7a5c00; font-weight: 600; }
+
+.pnl-pos { color: #1a7f4b; font-weight: 600; }
+.pnl-neg { color: #c0392b; font-weight: 600; }
+
+.badge-asgn {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #7a5c00;
+  background: #fff3cd;
+  border: 1px solid #e6c75a;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.commission { color: #888; }
+.notes { color: #888; font-size: 0.72rem; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+
+.strategy-select {
+  padding: 2px 4px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  background: #fff;
+  cursor: pointer;
+  min-width: 120px;
+}
+
+.strategy-select:focus {
+  outline: 2px solid #4a90d9;
+  border-color: transparent;
+}

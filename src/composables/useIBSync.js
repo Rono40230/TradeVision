@@ -1,6 +1,5 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { detectStrategies, extractAssignments } from '../utils/ibkr/strategyDetector.js';
 import { useRocketStore } from './rocketStore.js';
 
 const positionTimer = ref(null);
@@ -51,6 +50,26 @@ export function useIBSync() {
    * @param {number} queryId - Flex Query ID
    * @returns {Promise<{success: boolean, count: number, error?: string}>}
    */
+  /**
+   * Détection automatique de la stratégie d'un trade individuel (fallback)
+   * NB: PCS nécessite une analyse de groupe — non détectable ici sur un seul trade.
+   */
+  function detectStrategy(t) {
+    if (t.asset_class === 'CASH') return 'Autre'
+    const isOpt = t.asset_class === 'OPT' || /\d{6}[CP]\d+/.test(t.symbol || '')
+    if (isOpt) {
+      const isCall = t.put_call === 'C' || (t.put_call !== 'P' && /\d{6}C\d+/.test(t.symbol || ''))
+      const isSell = (t.side || '').toUpperCase() === 'SELL'
+      if (isCall) return isSell ? 'Naked Call' : 'Long Call'
+      return isSell ? 'Naked Put' : 'Long Put'
+    }
+    // STK : assignation → Wheel, sinon Rockets
+    const notes = (t.notes || '').toUpperCase()
+    const tokens = notes.split(/[;,\s]+/).filter(Boolean)
+    const isAssigned = tokens.some(c => c === 'A' || c === 'EX' || c === 'ASGN')
+    return isAssigned ? 'Wheel' : 'Rockets'
+  }
+
   async function syncFromIB(db, flexToken, queryId, strategyOverrides = {}) {
     if (isSyncing.value) {
       return { success: false, error: 'Sync already in progress' };
@@ -60,117 +79,138 @@ export function useIBSync() {
     syncError.value = null;
 
     try {
-      // 1. Récupère trades depuis Flex Query via Rust backend
-      const rawTrades = await invoke('fetch_flex_trades', { 
+      // 1. Récupère les FlexTrade complets (20 champs) depuis Rust
+      const rawTrades = await invoke('fetch_flex_trades', {
         flexToken: flexToken,
         queryId: queryId
       });
-      
+
       if (!rawTrades || rawTrades.length === 0) {
         throw new Error('No trades returned from Flex Query');
       }
 
-      // 2. Mapper au format attendu par le détecteur de stratégies
-      // Note: le backend Rust retourne les champs en snake_case (trade_id, realized_pnl, etc.)
-      // Heuristique asset type: le format OCC option est "SYMBOL YYMMDD[CP]STRIKE" (>10 chars avec chiffres)
-      const mappedExecutions = rawTrades.map(t => {
-        const isOption = /\d{6}[CP]\d+/.test(t.symbol)
-        const isCall = /\d{6}C\d+/.test(t.symbol)
-        const multiplier = isOption ? 100 : 1
-        return {
-          id: t.trade_id,
-          date: t.date,
-          symbol: t.symbol,
-          assetType: isOption ? 'OPT' : 'STK',
-          side: t.side,
-          quantity: t.quantity,
-          price: t.price,
-          commission: t.commission,
-          realizedPnl: t.realized_pnl || 0,
-          unrealizedPnl: 0,
-          strike: null,
-          expiry: null,
-          type: isOption ? (isCall ? 'C' : 'P') : null,
-          description: t.symbol,
-          proceeds: (t.price * t.quantity * multiplier) * -1
-        }
-      });
+      // 2. Charger les stratégies déjà en base pour ne pas les écraser
+      let existingStrategies = {};
+      try {
+        const rows = await db.select('SELECT trade_id, strategy FROM flex_trades WHERE strategy IS NOT NULL');
+        for (const r of rows) existingStrategies[r.trade_id] = r.strategy;
+      } catch(e) { /* table inexistante au premier lancement */ }
 
-      // 3. Détecter les stratégies (regroupement par date/symbol)
-      const strategies = detectStrategies(mappedExecutions);
-      
-      // 3b. Détecter et sauver les assignations (Phase 4.1)
-      const assignments = extractAssignments(mappedExecutions);
-      for (const assig of assignments) {
-          await saveAssignment(db, assig);
-      }
-
-      // 4. Sauvegarde les résultats (dépliage des stratégies complexes si nécessaire)
+      // 3. Sauvegarder uniquement les trades CLOTURÉS dans flex_trades
       let savedCount = 0;
-      for (const strat of strategies) {
-        if (strat.legs && strat.legs.length > 0) {
-          // C'est une stratégie complexe (Spread, IC, etc.)
-          for (const leg of strat.legs) {
-            const overriddenStrategy = strategyOverrides[leg.id] ?? strat.detectedStrategy;
-            const success = await saveSingleTrade(db, leg, overriddenStrategy);
-            if (success) savedCount++;
-          }
-        } else {
-          // C'est un trade simple
-          const overriddenStrategy = strategyOverrides[strat.id] ?? strat.detectedStrategy;
-          const success = await saveSingleTrade(db, strat, overriddenStrategy);
-          if (success) savedCount++;
+      let skippedCount = 0;
+      for (const t of rawTrades) {
+        // Ignorer les trades ouverts — ils sont suivis dans open_positions
+        const oc = (t.open_close || '').toUpperCase();
+        if (oc === 'O') { skippedCount++; continue; }
+
+        // Priorité override : paramètre > déjà en DB > auto-détection
+        const strategy = strategyOverrides[t.trade_id] ?? existingStrategies[t.trade_id] ?? detectStrategy(t);
+        try {
+          await db.execute(
+            `INSERT OR IGNORE INTO flex_trades
+             (trade_id, account_id, symbol, asset_class, side, quantity, multiplier,
+              price, commission, realized_pnl, date, time, expiry, strike, put_call,
+              open_close, exchange, proceeds, cost_basis, notes, strategy, synced_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`,
+            [
+              t.trade_id, t.account_id, t.symbol, t.asset_class, t.side,
+              t.quantity, t.multiplier, t.price, t.commission, t.realized_pnl,
+              t.date, t.time, t.expiry, t.strike, t.put_call,
+              t.open_close, t.exchange, t.proceeds, t.cost_basis, t.notes,
+              strategy
+            ]
+          );
+          savedCount++;
+        } catch (e) {
+          console.warn(`[FlexSync] Could not save trade ${t.trade_id}:`, e.message);
         }
       }
 
       tradesCount.value = savedCount;
       lastSyncTime.value = new Date().toISOString();
       await updateSyncMetadata(db, savedCount);
-      
-      // Phase 4.3 : Backup automatique après sync réussie
+
       try {
-          await invoke('create_backup');
+        await invoke('create_backup');
       } catch (e) {
-          console.warn('[Backup] Failed auto-backup:', e);
+        console.warn('[Backup] Failed auto-backup:', e);
       }
 
-      return { success: true, count: savedCount };
+      return { success: true, count: savedCount, skipped: skippedCount };
     } catch (error) {
       const errorMsg = error.message || error.toString() || 'Unknown sync error';
-      console.error('[FlexQuery] Full error:', error);
       syncError.value = errorMsg;
-      return { success: false, error: syncError.value };
+      return { success: false, error: errorMsg };
     } finally {
       isSyncing.value = false;
     }
   }
 
   /**
-   * Sauvegarde un trade individuel avec sa stratégie détectée
+   * Sauvegarde un tableau de trades déjà chargés (CSV import) directement en DB.
+   * N'insère que les trades CLOTURÉS (open_close = 'C' ou vide).
+   * INSERT OR IGNORE : ne jamais écraser un trade existant (IBKR = source immuable).
    */
-  async function saveSingleTrade(db, trade, strategyName) {
+  async function syncFromTrades(db, rawTrades, strategyOverrides = {}) {
+    if (isSyncing.value) {
+      return { success: false, error: 'Sync already in progress' };
+    }
+    if (!rawTrades || rawTrades.length === 0) {
+      return { success: false, error: 'No trades to save' };
+    }
+
+    isSyncing.value = true;
+    syncError.value = null;
+
     try {
-      await db.execute(
-        `INSERT OR IGNORE INTO rocket_trades_history 
-         (ib_trade_id, symbol, side, quantity, price_avg, commission, realized_pnl, open_date, strategy, asset_class)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          trade.id || trade.tradeId,
-          trade.symbol,
-          trade.side,
-          trade.quantity,
-          trade.price,
-          trade.commission,
-          trade.realizedPnl,
-          trade.date,
-          strategyName || 'Inconnu',
-          trade.assetType === 'STK' ? 'STOCK' : (trade.assetType === 'OPT' ? 'OPTION' : trade.assetType)
-        ]
-      );
-      return true;
+      // Charger les stratégies déjà en base pour ne pas les écraser
+      let existingStrategies = {};
+      try {
+        const rows = await db.select('SELECT trade_id, strategy FROM flex_trades WHERE strategy IS NOT NULL');
+        for (const r of rows) existingStrategies[r.trade_id] = r.strategy;
+      } catch(e) { /* table inexistante au premier lancement */ }
+
+      let savedCount = 0;
+      let skippedCount = 0;
+      for (const t of rawTrades) {
+        // Ignorer les trades ouverts — ils sont suivis dans open_positions
+        const oc = (t.open_close || '').toUpperCase();
+        if (oc === 'O') { skippedCount++; continue; }
+
+        const strategy = strategyOverrides[t.trade_id] ?? existingStrategies[t.trade_id] ?? detectStrategy(t);
+        try {
+          await db.execute(
+            `INSERT OR IGNORE INTO flex_trades
+             (trade_id, account_id, symbol, asset_class, side, quantity, multiplier,
+              price, commission, realized_pnl, date, time, expiry, strike, put_call,
+              open_close, exchange, proceeds, cost_basis, notes, strategy, synced_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)`,
+            [
+              t.trade_id, t.account_id ?? null, t.symbol, t.asset_class, t.side,
+              t.quantity, t.multiplier ?? 1, t.price, t.commission, t.realized_pnl,
+              t.date, t.time ?? null, t.expiry ?? null, t.strike ?? null, t.put_call ?? null,
+              t.open_close ?? null, t.exchange ?? null, t.proceeds ?? null, t.cost_basis ?? null,
+              t.notes ?? null, strategy
+            ]
+          );
+          savedCount++;
+        } catch (e) {
+          console.warn(`[CSVSync] Could not save trade ${t.trade_id}:`, e.message);
+        }
+      }
+
+      tradesCount.value = savedCount;
+      lastSyncTime.value = new Date().toISOString();
+      await updateSyncMetadata(db, savedCount);
+
+      return { success: true, count: savedCount, skipped: skippedCount };
     } catch (error) {
-      console.warn(`[FlexQuery] Could not save trade ${trade.id}:`, error.message);
-      return false;
+      const errorMsg = error.message || error.toString() || 'Unknown sync error';
+      syncError.value = errorMsg;
+      return { success: false, error: errorMsg };
+    } finally {
+      isSyncing.value = false;
     }
   }
 
@@ -190,26 +230,6 @@ export function useIBSync() {
     }
   }
 
-  /**
-   * Sauvegarde un événement d'assignation/exercice (Phase 4.1)
-   */
-  async function saveAssignment(db, assig) {
-    try {
-      // On cherche si un Wheel trade manuel existe pour ce symbole le même jour ou avant
-      // pour essayer de lier automatiquement (optionnel mais utile)
-      await db.execute(
-        `INSERT OR IGNORE INTO assignments 
-         (symbol, assignment_date, quantity, price, type)
-         VALUES (?, ?, ?, ?, ?)`,
-        [assig.symbol, assig.date, assig.quantity, assig.price, assig.type]
-      );
-      return true;
-    } catch (error) {
-      console.warn(`[FlexQuery] Could not save assignment for ${assig.symbol}:`, error.message);
-      return false;
-    }
-  }
-
   async function getLastSyncInfo(db) {
       try {
           const res = await db.select("SELECT * FROM sync_metadata WHERE account_id = 'FLEX'");
@@ -217,55 +237,6 @@ export function useIBSync() {
       } catch (e) {
           return null;
       }
-  }
-
-  /**
-   * Recalcule les stratégies pour tout l'historique (Migration Phase 1.2)
-   */
-  async function recalculateAllStrategies(db) {
-    try {
-      // 1. Charger tous les trades
-      const trades = await db.select('SELECT * FROM rocket_trades_history');
-      if (!trades || trades.length === 0) return { success: true, count: 0 };
-
-      // 2. Mapper au format détecteur
-      const mapped = trades.map(t => ({
-        id: t.ib_trade_id,
-        date: t.open_date,
-        symbol: t.symbol,
-        assetType: t.asset_class === 'STOCK' ? 'STK' : 'OPT',
-        side: t.side,
-        quantity: t.quantity,
-        price: t.price_avg,
-        commission: t.commission,
-        realizedPnl: t.realized_pnl || 0,
-        strike: t.strike,
-        expiry: t.expiry,
-        type: t.symbol.includes('C') ? 'C' : (t.symbol.includes('P') ? 'P' : null),
-        description: t.symbol
-      }));
-
-      // 3. Détecter
-      const strategies = detectStrategies(mapped);
-
-      // 4. Mettre à jour la DB
-      let updatedCount = 0;
-      for (const strat of strategies) {
-        const ids = strat.legs ? strat.legs.map(l => l.id) : [strat.id];
-        for (const id of ids) {
-          await db.execute(
-            'UPDATE rocket_trades_history SET strategy = ? WHERE ib_trade_id = ?',
-            [strat.detectedStrategy, id]
-          );
-          updatedCount++;
-        }
-      }
-
-      return { success: true, count: updatedCount };
-    } catch (error) {
-      console.error('[Recalculate] Error:', error);
-      return { success: false, error: error.message };
-    }
   }
 
   return {
@@ -276,10 +247,10 @@ export function useIBSync() {
     livePositions,
     lastPositionUpdate,
     syncFromIB,
+    syncFromTrades,
     syncPositions,
     startPositionWatch,
     stopPositionWatch,
     getLastSyncInfo,
-    recalculateAllStrategies
   };
 }

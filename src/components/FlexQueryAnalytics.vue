@@ -29,6 +29,15 @@
           📂 Importer CSV
         </button>
         <input ref="csvFileInput" type="file" accept=".csv" style="display:none" @change="onCsvFileSelected" />
+        <button
+          v-if="trades && trades.length > 0"
+          @click="saveToDb"
+          :disabled="saving"
+          class="btn btn-save"
+          title="Sauvegarder les trades importés en base de données"
+        >
+          {{ saving ? '⏳ Sauvegarde...' : saveSuccess ? saveMsg : `💾 Sauvegarder en DB (${trades.length} trades)` }}
+        </button>
       <button @click="toggleCredentials" class="btn-toggle">
         {{ showCredentials ? '🔒' : '🔓' }}
       </button>
@@ -99,22 +108,6 @@
         </div>
       </div>
 
-      <!-- Mensuel -->
-      <div class="bottom-row">
-        <div v-if="monthlyPL && monthlyPL.length > 0" class="monthly-breakdown">
-          <h3>Par mois</h3>
-          <div class="monthly-list">
-            <div v-for="m in monthlyPL" :key="m.month" class="month-row">
-              <span class="month-name">{{ m.month }}</span>
-              <span class="month-count">{{ m.tradesCount }} trades</span>
-              <span class="month-pnl" :class="{ positive: m.pnl >= 0, negative: m.pnl < 0 }">
-                ${{ m.pnl }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Table des trades avec stratégie manuelle -->
       <FlexTradesTable :trades="trades" :overrides="strategyOverrides" />
     </div>
@@ -128,6 +121,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useFlexQueries } from '../composables/useFlexQueries.js'
 import { useAnalytics } from '../composables/useAnalytics.js'
+import { useIBSync } from '../composables/useIBSync.js'
+import { initDB } from '../utils/db.js'
 import { invoke } from '@tauri-apps/api/core'
 import FlexTradesTable from './FlexTradesTable.vue'
 
@@ -138,6 +133,35 @@ const {
   fetchFlexTrades: fetchFlexTradesApi,
   strategyOverrides
 } = useFlexQueries()
+
+const { syncFromTrades, isSyncing } = useIBSync()
+const saving = ref(false)
+const saveSuccess = ref(false)
+const saveMsg = ref('')
+let db = null
+
+const saveToDb = async () => {
+  if (!trades.value || trades.value.length === 0) return
+  saving.value = true
+  saveSuccess.value = false
+  saveMsg.value = ''
+  try {
+    if (!db) db = await initDB()
+    const result = await syncFromTrades(db, trades.value, strategyOverrides.value)
+    if (result.success) {
+      const already = trades.value.length - result.count
+      saveMsg.value = result.count === 0
+        ? `Déjà à jour (${already} trades en DB)`
+        : `✅ ${result.count} nouveaux trades sauvés${already > 0 ? ` (${already} déjà présents)` : ''}`
+      saveSuccess.value = true
+      setTimeout(() => { saveSuccess.value = false; saveMsg.value = '' }, 5000)
+    }
+  } catch (err) {
+    fetchError.value = err.toString()
+  } finally {
+    saving.value = false
+  }
+}
 
 // Advanced Analytics
 const { stats: advancedStats, monthlyPL, byStrategy } = useAnalytics(trades)
@@ -229,399 +253,4 @@ const onCsvFileSelected = async (event) => {
 }
 </script>
 
-<style scoped>
-.flex-analytics-container {
-  padding: 12px 16px;
-  background: #f5f5f5;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-/* TOP BAR : titre + credentials + toggle sur une ligne */
-.top-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-}
-
-.top-bar h2 {
-  margin: 0;
-  font-size: 1rem;
-  color: #333;
-  white-space: nowrap;
-}
-
-.credentials-inline {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-}
-
-.credentials-inline .input-field {
-  flex: 2;
-  min-width: 120px;
-}
-
-.input-short {
-  flex: 1 !important;
-  min-width: 90px;
-  max-width: 140px;
-}
-
-.btn-toggle {
-  padding: 6px 10px;
-  background: #e0e0e0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.btn-toggle:hover {
-  background: #d0d0d0;
-}
-
-/* STATS EN GRILLE SUR UNE OU DEUX LIGNES */
-.stats-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.stats-row .stat-card {
-  flex: 1 1 80px;
-  min-width: 80px;
-  padding: 8px 10px;
-  background: white;
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  text-align: center;
-}
-
-.stats-row .stat-card h3 {
-  margin: 0 0 4px 0;
-  color: #777;
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.stats-row .stat-value {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: bold;
-  color: #333;
-}
-
-/* BOTTOM : stratégie + mensuel côte à côte */
-.bottom-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.header {
-  display: none;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-  margin-top: 20px;
-  padding: 15px;
-  background: white;
-  border-radius: 4px;
-}
-
-.page-btn {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  background: white;
-  cursor: pointer;
-}
-
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.credentials-section {
-  display: none;
-}
-
-.form-group {
-  margin-bottom: 15px;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.form-group label {
-  font-weight: bold;
-  min-width: 100px;
-}
-
-.input-field {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-primary {
-  background: #007bff;
-  color: white;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #0056b3;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.btn-secondary:hover {
-  background: #545b62;
-}
-
-.btn-toggle {
-  padding: 8px 12px;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-toggle:hover {
-  background: #e0e0e0;
-}
-
-.error-message {
-  color: #d32f2f;
-  background: #ffebee;
-  padding: 15px;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  border-left: 4px solid #d32f2f;
-}
-
-.error-message p {
-  margin: 8px 0 0 0;
-  font-size: 0.9em;
-}
-
-.retry-hint {
-  color: #666;
-  font-style: italic;
-}
-
-.loading-message {
-  text-align: center;
-  padding: 30px 20px;
-  background: #e3f2fd;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  border-left: 4px solid #2196f3;
-}
-
-.loading-message p {
-  margin: 10px 0;
-  font-size: 1.1em;
-  color: #1976d2;
-}
-
-.subtitle {
-  font-size: 0.9em !important;
-  color: #666 !important;
-}
-
-.spinner {
-  display: inline-block;
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #2196f3;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  background: white;
-  padding: 10px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  text-align: center;
-}
-
-.stat-card h3 {
-  margin: 0 0 6px 0;
-  color: #666;
-  font-size: 0.78em;
-}
-
-.stat-value {
-  margin: 0;
-  font-size: 1.4em;
-  font-weight: bold;
-  color: #333;
-}
-
-.stat-value.mb-0 {
-  margin-bottom: 0;
-}
-
-.text-muted {
-  font-size: 0.8rem;
-  color: #888;
-}
-
-.stat-value.positive {
-  color: #28a745;
-}
-
-.stat-value.negative {
-  color: #dc3545;
-}
-
-/* New Analysis Sections */
-.strategy-analysis, .monthly-breakdown {
-  flex: 1 1 200px;
-  min-width: 180px;
-  margin-top: 0;
-  background: white;
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-}
-
-.strategy-analysis h3, .monthly-breakdown h3 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 0.85rem;
-  color: #444;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 6px;
-}
-
-.strategy-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
-}
-
-.strategy-card {
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 4px solid #007bff;
-}
-
-.strategy-card h4 {
-  margin: 0 0 10px 0;
-  font-size: 1rem;
-  color: #333;
-}
-
-.strat-metrics {
-  display: flex;
-  flex-direction: column;
-}
-
-.strat-pnl {
-  font-size: 1.4rem;
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-
-.strat-sub {
-  display: flex;
-  gap: 10px;
-  font-size: 0.8rem;
-  color: #666;
-}
-
-.monthly-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.month-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  padding: 10px 15px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  align-items: center;
-}
-
-.month-name {
-  font-weight: bold;
-  color: #333;
-}
-
-.month-count {
-  color: #666;
-  text-align: center;
-}
-
-.month-pnl {
-  text-align: right;
-  font-weight: bold;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 20px;
-  opacity: 0.3;
-}
-
-/* Removed styles for Table and Pagination */
-</style>
+<style scoped src="./flex-query-analytics.css"></style>

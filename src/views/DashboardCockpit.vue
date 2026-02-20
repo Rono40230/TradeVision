@@ -35,10 +35,10 @@
                     v-for="strat in ['wheel', 'pcs', 'rockets']"
                     :key="strat"
                     :strategy="strat"
-                    :activeTrades="activeTradesByStrategy[strat] || []"
-                    :stats="rocketStatsByStrategy[strat]"
-                    :totalAssigned="rocketStatsByStrategy[strat]?.totalAssigned || 0"
-                    :totalExpectedPremium="rocketStatsByStrategy[strat]?.totalExpectedPremium || 0"
+                    :activeTrades="openPositionsByStrategy[strat] || []"
+                    :stats="rocketStatsWithPositions[strat]"
+                    :totalAssigned="rocketStatsWithPositions[strat]?.totalAssigned || 0"
+                    :totalExpectedPremium="rocketStatsWithPositions[strat]?.totalExpectedPremium || 0"
                     :history="strat === 'rockets' ? rocketClosedHistory : []"
                     @open-strategy="onOpenStrategy"
                     @open-history="openModal('rocket-history-strat', strat)"
@@ -82,6 +82,8 @@ import { useDashboardLogic } from '../composables/useDashboardLogic.js';
 import { useLivePrices } from '../composables/useLivePrices.js';
 import { useRocketStore } from '../composables/rocketStore.js';
 import { currentAccountId } from '../composables/useKasperStore.js';
+import { useOpenPositions } from '../composables/useOpenPositions.js';
+import { initDB } from '../utils/db.js';
 
 const emit = defineEmits(['navigate']);
 
@@ -111,9 +113,29 @@ const modalData = ref(null);
 const {
     kasperEntriesByAccount,
     rocketBuyingPower,
-    activeTradesByStrategy,
     rocketStatsByStrategy
 } = useDashboardLogic(kasperAccounts, allKasperEntries, rocketAccount, allActiveTrades, livePrices, { getOccSymbol, getSpreadPrice });
+
+// ── Positions ouvertes depuis open_positions (source de vérité) ──────────────
+const {
+    openPositionsByStrategy,
+    capitalUsedByStrategy,
+    loadOpenPositions,
+} = useOpenPositions();
+
+// Stats fusionnées : capitalAllocated vient de rocketAccount, capitalUsed de open_positions
+const rocketStatsWithPositions = computed(() => {
+    const strats = ['wheel', 'pcs', 'rockets'];
+    const out = {};
+    for (const s of strats) {
+        const base = rocketStatsByStrategy.value?.[s] || {};
+        out[s] = {
+            ...base,
+            capitalUsed: capitalUsedByStrategy.value?.[s] ?? 0,
+        };
+    }
+    return out;
+});
 
 // Kasper Modal Computed
 const kasperRealTimeCapital = computed(() => {
@@ -144,6 +166,11 @@ onMounted(async () => {
             pcsClosedHistory.value = await fetchHistory('pcs');
             wheelClosedHistory.value = await fetchHistory('wheel');
         }
+        // Charger les positions ouvertes depuis la DB persistante
+        try {
+            const db = await initDB();
+            await loadOpenPositions(db);
+        } catch (_e) { }
     } catch (e) { }
 });
 

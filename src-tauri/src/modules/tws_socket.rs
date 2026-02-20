@@ -104,26 +104,46 @@ struct Trades {
     trade: Option<Vec<FlexTradeRaw>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct FlexTradeRaw {
-    #[serde(rename = "accountId")]
+    #[serde(rename = "accountId", default)]
     account_id: String,
-    #[serde(rename = "tradeID")]
+    #[serde(rename = "tradeID", default)]
     trade_id: String,
+    #[serde(default)]
     symbol: String,
+    #[serde(rename = "buySell", default)]
     side: String,
+    #[serde(default)]
     quantity: i32,
+    #[serde(rename = "tradePrice", default)]
     price: f64,
-    #[serde(rename = "ibCommission")]
+    #[serde(rename = "ibCommission", default)]
     commission: f64,
-    #[serde(rename = "ibCommissionCurrency")]
-    commission_currency: String,
-    #[serde(rename = "realizedPnL")]
+    #[serde(rename = "fifoPnlRealized", default)]
     realized_pnl: f64,
-    #[serde(rename = "tradeDate")]
-    date: String,
-    #[serde(rename = "tradeTime")]
-    time: String,
+    #[serde(rename = "dateTime", default)]
+    date_time: String,
+    #[serde(rename = "assetCategory", default)]
+    asset_class: String,
+    #[serde(rename = "putCall", default)]
+    put_call: String,
+    #[serde(rename = "multiplier", default)]
+    multiplier: i32,
+    #[serde(default)]
+    expiry: String,
+    #[serde(default)]
+    strike: f64,
+    #[serde(rename = "openCloseIndicator", default)]
+    open_close: String,
+    #[serde(default)]
+    exchange: String,
+    #[serde(default)]
+    proceeds: f64,
+    #[serde(rename = "costBasis", default)]
+    cost_basis: f64,
+    #[serde(rename = "notes", default)]
+    notes: String,
 }
 
 /// Client pour accéder à TWS via socket TCP + Flex Queries
@@ -194,8 +214,14 @@ impl TWSSyncClient {
     /// ✅ IMPLÉMENTÉ - Utilise l'API HTTP officielle IBKR
     /// 🔄 AUTO-RETRY: Max 5 tentatives avec délai de 3s entre chaque (error 1019)
     /// API publique: parse un CSV fourni en string (import fichier local)
+    /// Filtre : seuls les trades cl\u00f4tur\u00e9s (open_close = "C" ou vide pour compatibilit\u00e9)
     pub async fn parse_csv_public(&self, csv_content: String) -> Result<Vec<FlexTrade>, String> {
-        self.parse_flex_csv(csv_content).await
+        let trades = self.parse_flex_csv(csv_content).await?;
+        let closed: Vec<FlexTrade> = trades.into_iter()
+            .filter(|t| t.open_close.is_empty() || t.open_close.to_uppercase() == "C")
+            .collect();
+        eprintln!("[Flex CSV] Filtre open_close=C : {} trades clotures retenus", closed.len());
+        Ok(closed)
     }
 
     pub async fn get_flex_trades(
@@ -212,9 +238,13 @@ impl TWSSyncClient {
             
             match self.fetch_flex_trades_single(flex_token, query_id).await {
                 Ok(trades) => {
-                    eprintln!("[Flex Query] ✅ Success: {} trades fetched", trades.len());
-                    println!("[Flex Query] ✅ Success: {} trades fetched", trades.len());
-                    return Ok(trades);
+                    // Filtre : uniquement les trades clotures (open_close = "C" ou vide)
+                    let closed: Vec<FlexTrade> = trades.into_iter()
+                        .filter(|t| t.open_close.is_empty() || t.open_close.to_uppercase() == "C")
+                        .collect();
+                    eprintln!("[Flex Query] OK: {} closed trades (open_close=C filter applied)", closed.len());
+                    println!("[Flex Query] OK: {} closed trades", closed.len());
+                    return Ok(closed);
                 }
                 Err(e) if e.contains("1019") && attempt < MAX_RETRIES => {
                     eprintln!("[Flex Query] ⏳ Error 1019 (statement generating)");
@@ -367,27 +397,39 @@ impl TWSSyncClient {
                                             if let Ok(trade) =
                                                 serde_json::from_value::<FlexTradeRaw>(trade_val.clone())
                                             {
+                                                // Parser dateTime "YYYYMMDD;HHmmss" → date + time
+                                                let (date, time) = if trade.date_time.contains(';') {
+                                                    let mut p = trade.date_time.splitn(2, ';');
+                                                    (p.next().unwrap_or("").to_string(), p.next().unwrap_or("").to_string())
+                                                } else {
+                                                    (trade.date_time.clone(), String::new())
+                                                };
+                                                // Normaliser expiry YYYYMMDD → YYYY-MM-DD
+                                                let expiry = if trade.expiry.len() == 8 && trade.expiry.chars().all(|c| c.is_ascii_digit()) {
+                                                    format!("{}-{}-{}", &trade.expiry[..4], &trade.expiry[4..6], &trade.expiry[6..8])
+                                                } else { trade.expiry.clone() };
+                                                let mult = if trade.multiplier == 0 { 1 } else { trade.multiplier };
                                                 trades.push(FlexTrade {
-                                                    account_id: trade.account_id,
-                                                    trade_id: trade.trade_id,
-                                                    symbol: trade.symbol,
-                                                    asset_class: String::new(),
-                                                    side: trade.side,
-                                                    quantity: trade.quantity,
-                                                    multiplier: 1,
-                                                    price: trade.price,
-                                                    commission: trade.commission,
+                                                    account_id:   trade.account_id,
+                                                    trade_id:     trade.trade_id,
+                                                    symbol:       trade.symbol,
+                                                    asset_class:  trade.asset_class,
+                                                    side:         trade.side,
+                                                    quantity:     trade.quantity.abs(),
+                                                    multiplier:   mult,
+                                                    price:        trade.price,
+                                                    commission:   trade.commission.abs(),
                                                     realized_pnl: trade.realized_pnl,
-                                                    date: trade.date,
-                                                    time: trade.time,
-                                                    expiry: String::new(),
-                                                    strike: 0.0,
-                                                    put_call: String::new(),
-                                                    open_close: String::new(),
-                                                    exchange: String::new(),
-                                                    proceeds: 0.0,
-                                                    cost_basis: 0.0,
-                                                    notes: String::new(),
+                                                    date,
+                                                    time,
+                                                    expiry,
+                                                    strike:       trade.strike,
+                                                    put_call:     trade.put_call,
+                                                    open_close:   trade.open_close,
+                                                    exchange:     trade.exchange,
+                                                    proceeds:     trade.proceeds,
+                                                    cost_basis:   trade.cost_basis,
+                                                    notes:        trade.notes,
                                                 });
                                             }
                                         }
@@ -495,8 +537,66 @@ impl TWSSyncClient {
                 self.extract_xml_attr(attrs, "tradeTime", &mut trade.time);
             }
 
-            println!("[Flex XML] Trade parsé: id={} sym={} side={} qty={} price={} pnl={} date={}",
-                trade.trade_id, trade.symbol, trade.side, trade.quantity, trade.price, trade.realized_pnl, trade.date);
+            // ── Champs manquants — harmonisation avec parse_flex_csv ──────────
+
+            // assetCategory → asset_class
+            if trade.asset_class.is_empty() {
+                self.extract_xml_attr(attrs, "assetCategory", &mut trade.asset_class);
+            }
+
+            // putCall → put_call
+            self.extract_xml_attr(attrs, "putCall", &mut trade.put_call);
+
+            // multiplier
+            if trade.multiplier == 1 {
+                if let Ok(m) = self.extract_xml_attr_as_int(attrs, "multiplier") {
+                    if m > 0 { trade.multiplier = m; }
+                }
+            }
+
+            // expiry (format YYYYMMDD → YYYY-MM-DD)
+            if trade.expiry.is_empty() {
+                let mut expiry_raw = String::new();
+                self.extract_xml_attr(attrs, "expiry", &mut expiry_raw);
+                trade.expiry = if expiry_raw.len() == 8 && expiry_raw.chars().all(|c| c.is_ascii_digit()) {
+                    format!("{}-{}-{}", &expiry_raw[..4], &expiry_raw[4..6], &expiry_raw[6..8])
+                } else { expiry_raw };
+            }
+
+            // strike
+            if trade.strike == 0.0 {
+                if let Ok(s) = self.extract_xml_attr_as_float(attrs, "strike") { trade.strike = s; }
+            }
+
+            // proceeds
+            if let Ok(p) = self.extract_xml_attr_as_float(attrs, "proceeds") { trade.proceeds = p; }
+
+            // costBasis → cost_basis
+            if let Ok(cb) = self.extract_xml_attr_as_float(attrs, "costBasis") { trade.cost_basis = cb; }
+
+            // notes / description
+            if trade.notes.is_empty() {
+                self.extract_xml_attr(attrs, "notes", &mut trade.notes);
+            }
+            if trade.notes.is_empty() {
+                self.extract_xml_attr(attrs, "description", &mut trade.notes);
+            }
+
+            // openCloseIndicator → open_close
+            if trade.open_close.is_empty() {
+                self.extract_xml_attr(attrs, "openCloseIndicator", &mut trade.open_close);
+            }
+            if trade.open_close.is_empty() {
+                self.extract_xml_attr(attrs, "openClose", &mut trade.open_close);
+            }
+
+            // exchange
+            if trade.exchange.is_empty() {
+                self.extract_xml_attr(attrs, "exchange", &mut trade.exchange);
+            }
+
+            println!("[Flex XML] Trade parsé: id={} sym={} side={} qty={} price={} pnl={} date={} oc={}",
+                trade.trade_id, trade.symbol, trade.side, trade.quantity, trade.price, trade.realized_pnl, trade.date, trade.open_close);
 
             if !trade.symbol.is_empty() {
                 trades.push(trade);

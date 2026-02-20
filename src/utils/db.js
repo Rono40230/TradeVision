@@ -126,6 +126,63 @@ export async function initDB() {
   try { await db.execute("CREATE INDEX IF NOT EXISTS idx_symbol ON rocket_trades_history(symbol)"); } catch(e) {}
   try { await db.execute("ALTER TABLE rocket_trades_history ADD COLUMN is_deleted INTEGER DEFAULT 0"); } catch(e) {}
 
+  // Flex Trades IBKR — table principale (remplace rocket_trades_history)
+  // 20 champs du struct FlexTrade Rust + strategy (override utilisateur) + is_deleted
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS flex_trades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trade_id TEXT UNIQUE NOT NULL,
+      account_id TEXT,
+      symbol TEXT NOT NULL,
+      asset_class TEXT,
+      side TEXT,
+      quantity INTEGER DEFAULT 0,
+      multiplier INTEGER DEFAULT 1,
+      price REAL DEFAULT 0,
+      commission REAL DEFAULT 0,
+      realized_pnl REAL DEFAULT 0,
+      date TEXT,
+      time TEXT,
+      expiry TEXT,
+      strike REAL DEFAULT 0,
+      put_call TEXT,
+      open_close TEXT,
+      exchange TEXT,
+      proceeds REAL DEFAULT 0,
+      cost_basis REAL DEFAULT 0,
+      notes TEXT,
+      strategy TEXT,
+      is_deleted INTEGER DEFAULT 0,
+      synced_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_flex_trade_id ON flex_trades(trade_id)"); } catch(e) {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_flex_symbol ON flex_trades(symbol)"); } catch(e) {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_flex_date ON flex_trades(date)"); } catch(e) {}
+
+  // Positions ouvertes — saisies manuellement, persistantes entre sessions
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS open_positions (
+      id            TEXT PRIMARY KEY,
+      strategy      TEXT NOT NULL,
+      symbol        TEXT NOT NULL,
+      asset_class   TEXT NOT NULL DEFAULT 'OPT',
+      side          TEXT NOT NULL,
+      quantity      INTEGER NOT NULL,
+      price         REAL NOT NULL,
+      commission    REAL DEFAULT 0,
+      open_date     TEXT NOT NULL,
+      expiry        TEXT,
+      strike        REAL,
+      put_call      TEXT,
+      notes         TEXT,
+      created_at    TEXT DEFAULT (datetime('now')),
+      updated_at    TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_op_strategy ON open_positions(strategy)"); } catch(e) {}
+  try { await db.execute("CREATE INDEX IF NOT EXISTS idx_op_symbol ON open_positions(symbol)"); } catch(e) {}
+
   // Sync metadata
   await db.execute(`
     CREATE TABLE IF NOT EXISTS sync_metadata (
