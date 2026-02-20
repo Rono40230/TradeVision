@@ -25,8 +25,8 @@
     <!-- Stats -->
     <div class="stats-row">
       <div class="stat-card">
-        <div class="stat-label">Nombre de trades</div>
-        <div class="stat-value">{{ trades.length }}</div>
+        <div class="stat-label">Trades</div>
+        <div class="stat-value">{{ trades.length }} <small class="text-muted">({{ groups.length }} positions)</small></div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total P/L</div>

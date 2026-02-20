@@ -58,53 +58,21 @@
     </div>
 
     <!-- Stats -->
-    <div v-if="advancedStats" class="analytics-dashboard">
+    <div v-if="trades && trades.length > 0" class="analytics-dashboard">
       <div class="stats-row">
         <div class="stat-card">
-          <h3>Trades</h3>
-          <p class="stat-value">{{ advancedStats.totalTrades }}</p>
+          <div class="stat-label">Trades</div>
+          <div class="stat-value">{{ trades.length }} <small class="text-muted">({{ importGroups.length }} positions)</small></div>
         </div>
         <div class="stat-card">
-          <h3>P/L Net</h3>
-          <p class="stat-value" :class="{ positive: advancedStats.totalNetPnl >= 0, negative: advancedStats.totalNetPnl < 0 }">
-            ${{ advancedStats.totalNetPnl }}
-          </p>
+          <div class="stat-label">Total P/L</div>
+          <div class="stat-value" :class="importTotalPnL >= 0 ? 'positive' : 'negative'">
+            {{ formatCurrency(importTotalPnL) }}
+          </div>
         </div>
         <div class="stat-card">
-          <h3>Taux réussite</h3>
-          <p class="stat-value">{{ advancedStats.winRate }}%</p>
-        </div>
-        <div class="stat-card">
-          <h3>ROI</h3>
-          <p class="stat-value" :class="{ positive: advancedStats.totalROI >= 0, negative: advancedStats.totalROI < 0 }">
-            {{ advancedStats.totalROI }}%
-          </p>
-        </div>
-        <div class="stat-card">
-          <h3>Profit Factor</h3>
-          <p class="stat-value">{{ advancedStats.profitFactor }}</p>
-        </div>
-        <div class="stat-card">
-          <h3>R/R Ratio</h3>
-          <p class="stat-value">{{ advancedStats.rewardRiskRatio }}</p>
-        </div>
-        <div class="stat-card">
-          <h3>Drawdown Max</h3>
-          <p class="stat-value negative">${{ advancedStats.maxDrawdown }}</p>
-        </div>
-        <div class="stat-card">
-          <h3>Série gains</h3>
-          <p class="stat-value">{{ advancedStats.maxWinStreak }} <small class="text-muted">/ {{ advancedStats.maxLossStreak }}</small></p>
-        </div>
-        <div class="stat-card">
-          <h3>Gain / Perte moy.</h3>
-          <p class="stat-value">
-            <span class="positive">${{ advancedStats.avgWin }}</span> / <span class="negative">${{ advancedStats.avgLoss }}</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <h3>Durée moy.</h3>
-          <p class="stat-value">{{ advancedStats.avgHoldingTime }} j</p>
+          <div class="stat-label">Positions gagnantes</div>
+          <div class="stat-value">{{ importWinRate }}%</div>
         </div>
       </div>
 
@@ -120,8 +88,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useFlexQueries } from '../composables/useFlexQueries.js'
-import { useAnalytics } from '../composables/useAnalytics.js'
 import { useIBSync } from '../composables/useIBSync.js'
+import { buildGroups } from '../composables/useTradeGrouping.js'
 import { initDB } from '../utils/db.js'
 import { invoke } from '@tauri-apps/api/core'
 import FlexTradesTable from './FlexTradesTable.vue'
@@ -136,6 +104,20 @@ const {
 } = useFlexQueries()
 
 const { syncFromTrades, isSyncing } = useIBSync()
+
+// ── Stats identiques à HistoriqueComplet ─────────────────────────────────────
+const importGroups = computed(() => buildGroups(trades.value || []))
+const importTotalPnL = computed(() =>
+  (trades.value || []).reduce((sum, t) => sum + (t.realized_pnl || 0), 0)
+)
+const importWinRate = computed(() => {
+  if (importGroups.value.length === 0) return 0
+  const wins = importGroups.value.filter(g => g.totalPnl > 0).length
+  return Math.round((wins / importGroups.value.length) * 100)
+})
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value)
+
 const saving = ref(false)
 const saveSuccess = ref(false)
 const saveMsg = ref('')
