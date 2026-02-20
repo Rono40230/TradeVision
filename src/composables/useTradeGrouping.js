@@ -99,6 +99,9 @@ export function buildGroups(trades) {
   }
 
   // ── Passe 1 : FIFO STK + round-trip OPT ─────────────────────────────────
+  // Orphelins SELL STK : exécutions partielles d'une même clôture (symbol + date)
+  const orphanStkMap = new Map()
+
   for (const trade of sorted) {
     if (trade.asset_class === 'STK') {
       const sym = trade.symbol.trim()
@@ -117,12 +120,24 @@ export function buildGroups(trades) {
       } else {
         const open = stkOpen.get(sym)
         if (open) {
+          // SELL correspondant à un BUY déjà ouvert → FIFO classique
           open.rawGroup.trades.push(trade)
           open.balance -= qty
           if (open.balance <= 0) { stkGroups.push(open.rawGroup); stkOpen.delete(sym) }
         } else {
-          const key = uniqueKey(`STK|${sym}|orphan|${trade.date}`)
-          stkGroups.push({ key, underlying: sym, assetClass: 'STK', expiry: '', date: trade.date, trades: [trade] })
+          // Orphelin : pas de BUY en DB (filtré open_close='O') → regrouper par (symbol, date)
+          const orphanKey = `STK|${sym}|close|${trade.date}`
+          if (!orphanStkMap.has(orphanKey)) {
+            orphanStkMap.set(orphanKey, {
+              key: orphanKey,
+              underlying: sym,
+              assetClass: 'STK',
+              expiry: '',
+              date: trade.date,
+              trades: [],
+            })
+          }
+          orphanStkMap.get(orphanKey).trades.push(trade)
         }
       }
     } else {
@@ -137,6 +152,7 @@ export function buildGroups(trades) {
     }
   }
   for (const open of stkOpen.values()) stkGroups.push(open.rawGroup)
+  for (const orphan of orphanStkMap.values()) stkGroups.push(orphan)
 
   // ── Passe 2 : fusionner OPT (underlying + expiry) → PCS ─────────────────
   const pcsMap = new Map()
