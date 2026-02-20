@@ -155,9 +155,6 @@ const saveToDb = async () => {
   }
 }
 
-// Advanced Analytics
-const { stats: advancedStats, monthlyPL, byStrategy } = useAnalytics(trades)
-
 const flexToken = ref('')
 const queryId = ref(null)
 const error = computed(() => fetchError.value)
