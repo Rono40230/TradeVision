@@ -797,9 +797,14 @@ impl TWSSyncClient {
                 .unwrap_or_else(|| {
                     // Empreinte stable : indépendante de la position dans le CSV.
                     // On exclut le `time` : il peut être absent selon le format d'export.
-                    let price_i = (get_f(idx_price) * 10000.0).round() as i64;
-                    let qty_val = get_f(idx_qty).abs() as i32;
-                    format!("SYN|{}|{}|{}|{}|{}", symbol, date, side, qty_val, price_i)
+                    // Strike + put_call inclus pour éviter les collisions sur options
+                    // de même symbole/date/side/qty/price (ex: options expirées à 0$).
+                    let price_i  = (get_f(idx_price) * 10000.0).round() as i64;
+                    let qty_val  = get_f(idx_qty).abs() as i32;
+                    let strike_i = (get_f(idx_strike) * 100.0).round() as i64;
+                    let pc       = idx_putcall.and_then(|i| fields.get(i)).map(|s| s.trim()).unwrap_or("");
+                    let exp      = idx_expiry.and_then(|i| fields.get(i)).map(|s| s.trim()).unwrap_or("");
+                    format!("SYN|{}|{}|{}|{}|{}|{}|{}|{}", symbol, date, side, qty_val, price_i, strike_i, pc, exp)
                 }),
             symbol:       symbol.clone(),
             asset_class:  asset_class_str,
