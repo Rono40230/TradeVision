@@ -218,7 +218,10 @@ const onCsvFileSelected = async (event) => {
   try {
     const text = await file.text()
     const rawTrades = await invoke('parse_flex_trades_csv', { csvContent: text })
-    trades.value = (rawTrades || []).map(t => {
+    trades.value = (rawTrades || [])
+      // Exclure trades ouverts : cohérence avec DB (flex_trades = clos uniquement)
+      .filter(t => (t.open_close || '').toUpperCase() !== 'O')
+      .map(t => {
       const isOption = t.asset_class === 'OPT' || /\d{6}[CP]\d+/.test(t.symbol)
       const isCall   = /\d{6}C\d+/.test(t.symbol) || t.put_call === 'C'
       let strategy = 'Rockets'
