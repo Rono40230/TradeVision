@@ -148,6 +148,13 @@ const saveToDb = async () => {
   saveMsg.value = ''
   try {
     if (!db) db = await initDB()
+    console.log(`[saveToDb] trades.value.length=${trades.value.length}`)
+    const ocGroups = {}
+    for (const t of trades.value) {
+      const oc = (t.open_close || '(vide)').toUpperCase()
+      ocGroups[oc] = (ocGroups[oc] || 0) + 1
+    }
+    console.log('[saveToDb] open_close répartition avant syncFromTrades:', ocGroups)
     const result = await syncFromTrades(db, trades.value, strategyOverrides.value)
     if (result.success) {
       const already = trades.value.length - result.count

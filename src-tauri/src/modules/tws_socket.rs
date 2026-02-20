@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 use std::time::Duration;
+use std::collections::HashMap;
 use regex;
 
 /// Configuration pour la connexion TWS/IB Gateway
@@ -669,11 +670,18 @@ impl TWSSyncClient {
                 None
             };
             let mut data_count = 0usize;
+            // Déduplication des fingerprints SYN (partial fills identiques)
+            let mut syn_counter: HashMap<String, u32> = HashMap::new();
             for line in lines.iter().skip(1) {
                 let fields = Self::parse_csv_line(line);
                 if fields.is_empty() { continue; }
                 data_count += 1;
-                if let Some(t) = Self::parse_csv_row(&fields, &find, data_count) {
+                if let Some(mut t) = Self::parse_csv_row(&fields, &find, data_count) {
+                    if t.trade_id.starts_with("SYN|") {
+                        let n = syn_counter.entry(t.trade_id.clone()).or_insert(0);
+                        if *n > 0 { t.trade_id = format!("{}|{}", t.trade_id, n); }
+                        *n += 1;
+                    }
                     trades.push(t);
                 }
             }
@@ -687,6 +695,8 @@ impl TWSSyncClient {
         
         let mut current_headers: Vec<String> = Vec::new();
         let mut data_count = 0usize;
+        // Déduplication des fingerprints SYN (partial fills identiques)
+        let mut syn_counter: HashMap<String, u32> = HashMap::new();
 
         for line in &lines {
             let fields = Self::parse_csv_line(line);
@@ -715,7 +725,12 @@ impl TWSSyncClient {
                     }
                     None
                 };
-                if let Some(t) = Self::parse_csv_row(&fields, &find, data_count) {
+                if let Some(mut t) = Self::parse_csv_row(&fields, &find, data_count) {
+                    if t.trade_id.starts_with("SYN|") {
+                        let n = syn_counter.entry(t.trade_id.clone()).or_insert(0);
+                        if *n > 0 { t.trade_id = format!("{}|{}", t.trade_id, n); }
+                        *n += 1;
+                    }
                     trades.push(t);
                 }
             }

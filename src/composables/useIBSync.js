@@ -175,10 +175,36 @@ export function useIBSync() {
 
       let savedCount = 0;
       let skippedCount = 0;
+      let skippedOpen = 0;
+      let skippedDuplicateId = 0;
+      let skippedInsertIgnore = 0;
+      let errorCount = 0;
+
+      // ── DIAGNOSTIC 1 : compter open_close dans l'input ──
+      const ocGroups = {};
+      for (const t of rawTrades) {
+        const oc = (t.open_close || '(vide)').toUpperCase();
+        ocGroups[oc] = (ocGroups[oc] || 0) + 1;
+      }
+      console.log(`[CSVSync] REÇU: ${rawTrades.length} trades. open_close répartition:`, ocGroups);
+
+      // ── DIAGNOSTIC 2 : collisions de trade_id dans l'input lui-même ──
+      const idSeen = new Map();
+      for (const t of rawTrades) {
+        if (idSeen.has(t.trade_id)) {
+          const prev = idSeen.get(t.trade_id);
+          console.warn(`[CSVSync] COLLISION trade_id="${t.trade_id}" entre:`, prev, '↔', { symbol: t.symbol, date: t.date, side: t.side, qty: t.quantity, price: t.price, strike: t.strike, pc: t.put_call, expiry: t.expiry, oc: t.open_close });
+          skippedDuplicateId++;
+        } else {
+          idSeen.set(t.trade_id, { symbol: t.symbol, date: t.date, side: t.side, qty: t.quantity, price: t.price, strike: t.strike, pc: t.put_call, expiry: t.expiry, oc: t.open_close });
+        }
+      }
+      console.log(`[CSVSync] Collisions trade_id dans input: ${skippedDuplicateId}`);
+
       for (const t of rawTrades) {
         // Ignorer les trades ouverts — ils sont suivis dans open_positions
         const oc = (t.open_close || '').toUpperCase();
-        if (oc === 'O') { skippedCount++; continue; }
+        if (oc === 'O') { skippedOpen++; skippedCount++; continue; }
 
         const strategy = strategyOverrides[t.trade_id] ?? existingStrategies[t.trade_id] ?? detectStrategy(t);
         try {
@@ -198,11 +224,15 @@ export function useIBSync() {
           );
           // rowsAffected = 0 si INSERT OR IGNORE a ignoré un doublon
           if (res.rowsAffected > 0) savedCount++;
-          else skippedCount++;
+          else { skippedInsertIgnore++; skippedCount++; }
         } catch (e) {
-          console.warn(`[CSVSync] Could not save trade ${t.trade_id}:`, e.message);
+          errorCount++;
+          console.warn(`[CSVSync] ERREUR INSERT trade_id="${t.trade_id}" symbol=${t.symbol}:`, e.message);
         }
       }
+
+      console.log(`[CSVSync] RÉSULTAT: input=${rawTrades.length} | skippedOpen=${skippedOpen} | skippedInsertIgnore=${skippedInsertIgnore} | errors=${errorCount} | inserted=${savedCount}`);
+      console.log(`[CSVSync] Équation: ${skippedOpen} + ${skippedInsertIgnore} + ${errorCount} + ${savedCount} = ${skippedOpen + skippedInsertIgnore + errorCount + savedCount} (attendu ${rawTrades.length})`);
 
       tradesCount.value = savedCount;
       lastSyncTime.value = new Date().toISOString();
