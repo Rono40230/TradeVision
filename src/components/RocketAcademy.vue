@@ -62,12 +62,16 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 import RocketHeader from './rocket/RocketHeader.vue';
 import TradeEntryForm from './rocket/TradeEntryForm.vue';
 import ActiveTradesList from './rocket/ActiveTradesList.vue';
 import RocketAllModals from './rocket/RocketAllModals.vue';
 import { useRocketState } from '../composables/useRocketState.js';
+
+const props = defineProps({
+    strategy: { type: String, default: 'wheel' }
+});
 
 const {
     account, strategyType,
@@ -82,6 +86,9 @@ const {
     activateTrade, neutralizeTrade, closeTrade,
     totalLatentPL
 } = useRocketState();
+
+// Applique la stratégie passée en prop
+watch(() => props.strategy, (val) => { if (val) strategyType.value = val; }, { immediate: true });
 
 const rocketAllModals = ref(null);
 const showCCModal = ref(false);
@@ -126,8 +133,9 @@ onMounted(async () => {
     /* Main Layout */
     display: flex;
     flex-direction: column;
-    flex: 1; 
-    min-height: 0; 
+    width: 100%;
+    height: 100%;
+    min-height: 0;
     overflow: hidden;
     color: var(--text-color);
     background-color: var(--background-color, #121212);
@@ -147,6 +155,8 @@ onMounted(async () => {
 
 .main-layout {
     display: flex;
+    width: 100%;
+    box-sizing: border-box;
     flex: 1;
     overflow: hidden;
     gap: 1rem;

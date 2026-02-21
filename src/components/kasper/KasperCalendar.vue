@@ -144,12 +144,13 @@ function onDayLeave() {
 <style scoped>
 .calendar-section {
     flex: 2;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     background: var(--surface-color);
     border-radius: 8px;
     padding: 1rem;
-    overflow-y: auto; 
+    overflow-y: auto;
 }
 
 .calendar-header {

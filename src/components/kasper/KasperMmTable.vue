@@ -43,7 +43,9 @@
                              {{ calculateLot(pair) }}
                          </td>
                          <td>
-                             <button class="icon-btn delete-btn" @click="$emit('deletePair', pair)" title="Supprimer">×</button>
+                             <button class="icon-btn delete-btn" @click="$emit('deletePair', pair)" title="Supprimer">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                             </button>
                          </td>
                      </tr>
                      <!-- Add New Row -->
@@ -150,32 +152,35 @@ function updateLocalPair(pair, field, value) {
 .kasper-mm-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.95rem;
+    font-size: 0.75rem;
 }
 
 .kasper-mm-table th {
     text-align: left;
-    padding: 0.75rem;
+    padding: 0.35rem 0.5rem;
     background: #004dcf;
     color: white;
     font-weight: bold;
     border: 1px solid #333;
+    white-space: nowrap;
 }
 
 .kasper-mm-table td {
-    padding: 0.5rem;
+    padding: 0.25rem 0.4rem;
     border: 1px solid var(--border-color);
     vertical-align: middle;
+    white-space: nowrap;
 }
 
 .kasper-mm-table input {
-    width: 60px;
+    width: 48px;
     background: rgba(255,255,255,0.05);
     border: 1px solid var(--text-muted);
     color: var(--text-color);
-    padding: 0.25rem;
+    padding: 0.15rem;
     border-radius: 4px;
     text-align: center;
+    font-size: 0.75rem;
 }
 
 .kasper-mm-table .highlight-lot {
@@ -189,7 +194,8 @@ function updateLocalPair(pair, field, value) {
     text-align: center;
 }
 
-.icon-btn.delete-btn { color: #f44336; font-size: 1.2rem; padding: 0 0.5rem; background: none; border: none; cursor: pointer; }
+.icon-btn.delete-btn { color: #f44336; display: inline-flex; align-items: center; padding: 0 0.4rem; background: none; border: none; cursor: pointer; }
+.icon-btn.delete-btn:hover { color: #ff6b6b; }
 .icon-btn.add-btn { background: var(--accent-color); color: white; border-radius: 4px; width: 30px; border: none; cursor: pointer;}
 .add-row input { 
     width: 200px; 

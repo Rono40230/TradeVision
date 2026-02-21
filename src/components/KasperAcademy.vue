@@ -167,12 +167,13 @@ async function onSaveCapital(amount) {
 .kasper-academy {
     display: flex;
     flex-direction: column;
+    width: 100%;
     height: 100%;
-    overflow-y: auto;
+    box-sizing: border-box;
+    overflow: hidden;
     padding: 1rem;
     gap: 1.5rem;
-    /* Harmonization: Use Dashboard Colors */
-    background-color: var(--background-color, #121212);
+    background-color: var(--bg-color);
 }
 
 .kasper-main-row {
@@ -180,5 +181,7 @@ async function onSaveCapital(amount) {
     gap: 1.5rem;
     flex: 1;
     min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 </style>

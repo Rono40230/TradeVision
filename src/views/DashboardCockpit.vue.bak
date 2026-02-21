@@ -1,0 +1,80 @@
+<template>
+  <!-- Backup du contenu original de DashboardCockpit.vue avant refonte PHASE 2 -->
+  <div>
+    <p>Backup du dashboard cockpit original. Voir DashboardCockpit.vue pour la nouvelle version.</p>
+    <!-- Copie du template original -->
+    <div class="dashboard-cockpit">
+      <div class="cockpit-content">
+        <!-- ZONE KASPER (Gauche) -->
+        <section class="zone-kasper">
+          <div class="kasper-grid">
+            <!-- Summary -->
+            <KasperSummaryCard 
+              :accounts="kasperAccounts" 
+              :allEntries="allKasperEntries" 
+              @open-mm="openModal('kasper-mm')"
+            />
+            <!-- Accounts Cards -->
+            <KasperAccountCard 
+              v-for="acc in kasperAccounts" 
+              :key="acc.id" 
+              :account="acc"
+              :entries="kasperEntriesByAccount[acc.id] || []"
+              @open-account="onOpenKasperAccount"
+              @open-mm="openModal('kasper-mm')"
+            />
+          </div>
+        </section>
+        <!-- ZONE ROCKET (Droite) -->
+        <section class="zone-rocket">
+          <!-- GRAPHIQUE DE SYNTHÈSE -->
+          <SynthesisChart />
+          <div class="rocket-grid">
+            <RocketStrategyCard 
+              v-for="strat in ['wheel', 'pcs', 'rockets']"
+              :key="strat"
+              :strategy="strat"
+              :activeTrades="openPositionsByStrategy[strat] || []"
+              :stats="rocketStatsWithPositions[strat]"
+              :totalAssigned="rocketStatsWithPositions[strat]?.totalAssigned || 0"
+              :totalExpectedPremium="rocketStatsWithPositions[strat]?.totalExpectedPremium || 0"
+              :history="strat === 'rockets' ? rocketClosedHistory : []"
+              @open-strategy="onOpenStrategy"
+              @open-history="openModal('rocket-history-strat', strat)"
+              @open-mm="openModal('rocket-mm', strat)"
+            />
+          </div>
+        </section>
+      </div>
+      <!-- MODALES TABLEAU DE BORD -->
+      <DashboardModals
+        :currentModal="currentModal"
+        :modalData="modalData"
+        :rocketClosedHistory="rocketClosedHistory"
+        :pcsClosedHistory="pcsClosedHistory"
+        :wheelClosedHistory="wheelClosedHistory"
+        :kasperActiveAccount="kasperActiveAccount"
+        :kasperPairsConfig="kasperPairsConfig"
+        :kasperRealTimeCapital="kasperRealTimeCapital"
+        :kasperBaseRiskAmount="kasperBaseRiskAmount"
+        :modalTitle="modalTitle"
+        @close="closeModal"
+        @updatePair="updatePair"
+        @deletePair="deletePair"
+        @addPair="addPair"
+      />
+    </div>
+  </div>
+</template>
+
+<script setup>
+// Backup du script original (voir DashboardCockpit.vue pour la logique)
+import { onMounted, computed, ref } from 'vue';
+import KasperSummaryCard from '../components/dashboard/kasper/KasperSummaryCard.vue';
+import KasperAccountCard from '../components/dashboard/kasper/KasperAccountCard.vue';
+import SynthesisChart from '../components/dashboard/rocket/SynthesisChart.vue';
+import RocketStrategyCard from '../components/dashboard/rocket/RocketStrategyCard.vue';
+import DashboardModals from '../components/dashboard/DashboardModals.vue';
+import { useRocketState } from '../composables/useRocketState.js';
+import { useKasperState } from '../composables/useKasperState.js';
+</script>

@@ -75,18 +75,19 @@ function formatCurrencySimple(val) {
 .projection-block.loss h4 { background: #004dcf; }
 
 .proj-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-direction: column;
 }
 
 .proj-item {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
-    padding: 0.5rem;
-    border-right: 1px solid var(--border-color);
+    padding: 0.35rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
 }
-.proj-item:last-child { border-right: none; }
+.proj-item:last-child { border-bottom: none; }
 
 .proj-label { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem; }
 .proj-value { font-weight: bold; font-size: 1.1rem; }
